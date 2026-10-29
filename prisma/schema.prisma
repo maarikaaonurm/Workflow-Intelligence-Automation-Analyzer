@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  url      = env("DATABASE_URL")
+  provider = "postgresql"
+}
+
+enum DepartmentRole {
+  MANAGER
+  EMPLOYEE
+}
+
+model Organization {
+  id          String       @id @default(cuid())
+  name        String
+  createdAt   DateTime     @default(now())
+  departments Department[]
+  users       User[]
+  auditLogs   AuditLog[]
+}
+
+model Department {
+  id             String                 @id @default(cuid())
+  organizationId String
+  name           String
+  createdAt      DateTime               @default(now())
+  organization   Organization           @relation(fields: [organizationId], references: [id])
+  memberships    DepartmentMembership[]
+  auditLogs      AuditLog[]
+
+  @@unique([organizationId, name])
+}
+
+model User {
+  id             String                 @id @default(cuid())
+  organizationId String
+  email          String                 @unique
+  name           String
+  isOrgAdmin     Boolean                @default(false)
+  active         Boolean                @default(true)
+  locale         String                 @default("en")
+  createdAt      DateTime               @default(now())
+  organization   Organization           @relation(fields: [organizationId], references: [id])
+  memberships    DepartmentMembership[]
+  auditLogs      AuditLog[]             @relation("AuditActor")
+}
+
+// Partial unique indexes (one active membership per user, one active manager
+// per department) are added in the migration SQL; Prisma cannot express them.
+model DepartmentMembership {
+  id           String         @id @default(cuid())
+  userId       String
+  departmentId String
+  role         DepartmentRole
+  active       Boolean        @default(true)
+  startedAt    DateTime       @default(now())
+  endedAt      DateTime?
+  user         User           @relation(fields: [userId], references: [id])
+  department   Department     @relation(fields: [departmentId], references: [id])
+
+  @@index([departmentId, active])
+  @@index([userId, active])
+}
+
+model AuditLog {
+  id             String        @id @default(cuid())
+  organizationId String
+  departmentId   String?
+  campaignId     String?
+  actorId        String?
+  action         String
+  targetType     String
+  targetId       String?
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  department     Department?   @relation(fields: [departmentId], references: [id])
+  actor          User?         @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([organizationId, createdAt])
+}
