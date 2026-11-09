@@ -41,4 +41,21 @@ describe("authorization policy", () => {
   it("denies everything across organizations", () => {
     expect(can(admin, "department:create", { organizationId: "other" })).toBe(false);
   });
+
+  it("lets admins and the department manager create campaigns, but not employees or other departments' managers", () => {
+    const acc = { organizationId: org, departmentId: "acc" };
+    expect(can(admin, "campaign:create", acc)).toBe(true);
+    expect(can(manager, "campaign:create", acc)).toBe(true);
+    expect(can(manager, "campaign:create", { organizationId: org, departmentId: "hr" })).toBe(false);
+    expect(can(employee, "campaign:create", acc)).toBe(false);
+  });
+
+  it("limits campaign management to the department manager and acknowledgement to employees", () => {
+    const acc = { organizationId: org, departmentId: "acc" };
+    expect(can(admin, "campaign:manage", acc)).toBe(false);
+    expect(can(employee, "campaign:manage", acc)).toBe(false);
+    expect(can(employee, "campaign:acknowledge", acc)).toBe(true);
+    expect(can(manager, "campaign:acknowledge", acc)).toBe(false);
+    expect(can(employee, "campaign:view", { organizationId: org, departmentId: "hr" })).toBe(false);
+  });
 });

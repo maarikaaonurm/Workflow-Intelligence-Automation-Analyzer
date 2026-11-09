@@ -12,13 +12,35 @@ enum DepartmentRole {
   EMPLOYEE
 }
 
+enum CampaignStatus {
+  DRAFT
+  INITIAL_MAPPING
+  ACTIVE
+  REVIEW_WINDOW
+  LOCKED
+  ANALYSIS_IN_PROGRESS
+  MANAGER_REVIEW
+  FINAL
+  ARCHIVED
+  CANCELLED
+}
+
+enum ParticipantStatus {
+  ACTIVE
+  // Stopped: no future participation, existing data stays in the analysis.
+  STOPPED
+  // Excluded: participant and their data are left out of the Final Analysis.
+  EXCLUDED
+}
+
 model Organization {
-  id          String       @id @default(cuid())
+  id          String             @id @default(cuid())
   name        String
-  createdAt   DateTime     @default(now())
+  createdAt   DateTime           @default(now())
   departments Department[]
   users       User[]
   auditLogs   AuditLog[]
+  campaigns   AnalysisCampaign[]
 }
 
 model Department {
@@ -29,22 +51,26 @@ model Department {
   organization   Organization           @relation(fields: [organizationId], references: [id])
   memberships    DepartmentMembership[]
   auditLogs      AuditLog[]
+  campaigns      AnalysisCampaign[]
 
   @@unique([organizationId, name])
 }
 
 model User {
-  id             String                 @id @default(cuid())
-  organizationId String
-  email          String                 @unique
-  name           String
-  isOrgAdmin     Boolean                @default(false)
-  active         Boolean                @default(true)
-  locale         String                 @default("en")
-  createdAt      DateTime               @default(now())
-  organization   Organization           @relation(fields: [organizationId], references: [id])
-  memberships    DepartmentMembership[]
-  auditLogs      AuditLog[]             @relation("AuditActor")
+  id                  String                    @id @default(cuid())
+  organizationId      String
+  email               String                    @unique
+  name                String
+  isOrgAdmin          Boolean                   @default(false)
+  active              Boolean                   @default(true)
+  locale              String                    @default("en")
+  createdAt           DateTime                  @default(now())
+  organization        Organization              @relation(fields: [organizationId], references: [id])
+  memberships         DepartmentMembership[]
+  auditLogs           AuditLog[]                @relation("AuditActor")
+  participations      CampaignParticipant[]
+  acknowledgements    CampaignAcknowledgement[]
+  reminderPreferences ReminderPreference[]
 }
 
 // Partial unique indexes (one active membership per user, one active manager
@@ -65,7 +91,7 @@ model DepartmentMembership {
 }
 
 model AuditLog {
-  id             String        @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   departmentId   String?
   campaignId     String?
@@ -74,10 +100,91 @@ model AuditLog {
   targetType     String
   targetId       String?
   metadata       Json?
-  createdAt      DateTime      @default(now())
-  organization   Organization  @relation(fields: [organizationId], references: [id])
-  department     Department?   @relation(fields: [departmentId], references: [id])
-  actor          User?         @relation("AuditActor", fields: [actorId], references: [id])
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  department     Department?  @relation(fields: [departmentId], references: [id])
+  actor          User?        @relation("AuditActor", fields: [actorId], references: [id])
 
   @@index([organizationId, createdAt])
+}
+
+// A department may have only one campaign in INITIAL_MAPPING, ACTIVE or
+// REVIEW_WINDOW at a time. Enforced by a partial unique index in the migration SQL.
+model AnalysisCampaign {
+  id                      String                    @id @default(cuid())
+  organizationId          String
+  departmentId            String
+  name                    String
+  startDate               DateTime                  @db.Date
+  endDate                 DateTime                  @db.Date
+  reviewWindowDays        Int                       @default(2)
+  retrospectiveWindowDays Int                       @default(3)
+  reminderTime            String                    @default("16:00")
+  reminderMessage         String                    @default("Check whether today's material activities have been recorded.")
+  status                  CampaignStatus            @default(DRAFT)
+  createdById             String
+  launchedAt              DateTime?
+  lockedAt                DateTime?
+  retentionSnapshot       Json?
+  createdAt               DateTime                  @default(now())
+  organization            Organization              @relation(fields: [organizationId], references: [id])
+  department              Department                @relation(fields: [departmentId], references: [id])
+  participants            CampaignParticipant[]
+  acknowledgements        CampaignAcknowledgement[]
+  reminderPreferences     ReminderPreference[]
+
+  @@index([departmentId, status])
+}
+
+model CampaignParticipant {
+  id            String                            @id @default(cuid())
+  campaignId    String
+  userId        String
+  // Observation for this participant starts here (campaign start, or the join date for late participants).
+  joinedAt      DateTime                          @db.Date
+  status        ParticipantStatus                 @default(ACTIVE)
+  removedAt     DateTime?
+  removedById   String?
+  campaign      AnalysisCampaign                  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user          User                              @relation(fields: [userId], references: [id])
+  excludedDates CampaignParticipantExcludedDate[]
+
+  @@unique([campaignId, userId])
+}
+
+// Out of Scope / Absent dates. No reason is collected.
+model CampaignParticipantExcludedDate {
+  id            String              @id @default(cuid())
+  participantId String
+  date          DateTime            @db.Date
+  createdById   String
+  createdAt     DateTime            @default(now())
+  participant   CampaignParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, date])
+}
+
+// Informational acknowledgement of "About This Analysis" (not legal consent).
+model CampaignAcknowledgement {
+  id             String           @id @default(cuid())
+  campaignId     String
+  userId         String
+  textVersion    String
+  acknowledgedAt DateTime         @default(now())
+  campaign       AnalysisCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id])
+
+  @@unique([campaignId, userId])
+}
+
+model ReminderPreference {
+  id         String           @id @default(cuid())
+  campaignId String
+  userId     String
+  time       String
+  enabled    Boolean          @default(true)
+  campaign   AnalysisCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [userId], references: [id])
+
+  @@unique([campaignId, userId])
 }

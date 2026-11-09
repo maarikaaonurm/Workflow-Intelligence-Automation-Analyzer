@@ -2,8 +2,8 @@
 
 Status legend: [ ] not started, [~] in progress, [x] done and verified.
 
-- [~] Phase 1 Foundation (code builds and unit tests pass; migration and seed not yet run against Railway): org, departments, users, roles, server-side authorization, dev login, demo accounts
-- [ ] Phase 2 Campaigns: lifecycle state machine, participants, single active campaign, About This Analysis, absent days, reminders
+- [x] Phase 1 Foundation: org, departments, users, roles, server-side authorization, dev login, demo accounts
+- [~] Phase 2 Campaigns (code builds, pure logic tested; DB services and pages not yet exercised on Railway): lifecycle state machine, participants, single active campaign, About This Analysis, absent days, reminders
 - [ ] Phase 3 Initial Mapping: categories + guide, units, systems, sensitivity, baseline versions, own CSV/Excel import
 - [ ] Phase 4 Activity Diary: manual, timer, Favorites, Log Again, Quick Add, meetings, markers, retrospective window, review window, confirm diary
 - [ ] Phase 5 Deterministic analysis: frequency normalization, expected/observed, decomposition, coverage

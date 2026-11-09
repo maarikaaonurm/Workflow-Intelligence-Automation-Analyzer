@@ -14,6 +14,8 @@ export type Action =
   | "user:manage"
   | "campaign:create"
   | "campaign:manage"
+  | "campaign:view"
+  | "campaign:acknowledge"
   | "campaign:reopen"
   | "diary:read"
   | "analysis:view"
@@ -46,10 +48,15 @@ export function can(actor: Actor, action: Action, resource: Resource): boolean {
     case "department:view":
       return actor.role === "ADMIN" || sameDepartment;
     case "campaign:create":
+      return actor.role === "ADMIN" || (actor.role === "MANAGER" && sameDepartment);
     case "campaign:manage":
     case "analysis:view":
     case "opportunity:validate":
-      return actor.role === "ADMIN" ? action === "campaign:create" : actor.role === "MANAGER" && sameDepartment;
+      return actor.role === "MANAGER" && sameDepartment;
+    case "campaign:view":
+      return actor.role === "ADMIN" || sameDepartment;
+    case "campaign:acknowledge":
+      return actor.role === "EMPLOYEE" && sameDepartment;
     case "diary:read":
       // Only the owner sees detailed diary data in Phase 4; manager department
       // drill-downs get their own authorized view later.

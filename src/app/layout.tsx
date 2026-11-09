@@ -39,6 +39,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {user && (
           <nav className="flex gap-6 border-b border-gray-200 px-6 py-2 text-sm">
             <Link href="/">{t("home")}</Link>
+            <Link href="/campaigns">{t("campaigns")}</Link>
             <Link href="/admin/departments">{t("departments")}</Link>
           </nav>
         )}

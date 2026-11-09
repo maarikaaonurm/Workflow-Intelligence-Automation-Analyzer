@@ -1,12 +1,9 @@
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { can, type Actor } from "@/lib/auth/policy";
+import { ForbiddenError } from "@/lib/errors";
 
-export class ForbiddenError extends Error {
-  constructor() {
-    super("FORBIDDEN");
-  }
-}
+export { ForbiddenError };
 
 export async function createDepartment(actor: Actor, name: string) {
   if (!can(actor, "department:create", { organizationId: actor.organizationId })) {
