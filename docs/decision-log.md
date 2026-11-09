@@ -23,3 +23,13 @@
 - **Who:** only the department's Department Manager (`campaign:manage`). The Organization Admin cannot manage participants; the admin's campaign role is create and reopen. Say so if you want the admin to restore participants too.
 - **Confirmation:** stop, exclude, restore, cancel and lock now go through a confirmation page that shows the effective date; the server actions refuse to run without `confirmed=yes`.
 - **Migration** backfills one period per existing participant (from joinedAt, closed at the removal date for stopped/excluded ones), so campaigns created before it keep their state.
+
+## 2026-11-11 Phase 3 Initial Mapping decisions
+- **Baseline versioning.** Each activity has versions. While the participant's mapping is a draft, version 1 is edited in place. Completing the mapping marks every version 1 as the baseline (`isBaseline`). After that an edit adds version N+1 and never touches the baseline. Activities added after completion start as non-baseline version 1. Draft activities can be deleted only before completion.
+- **Mapping is prerequisite-gated.** Writing requires: own data, an active participation, About This Analysis acknowledged, and the campaign in INITIAL_MAPPING or ACTIVE (calendar-corrected). Managers see only the completion count ("X / Y"), not the activities.
+- **Value category is not captured in Phase 3.** It is a later AI/manager-validated classification (a fixed list in code, not a table).
+- **Frequency and occurrences.** `occurrenceCount` is per frequency period; for AD_HOC it is per month. Duration is 1-1440 minutes per occurrence. Phase 5 turns this into expected workload.
+- **Reference data.** Categories, volume units and systems are per organization. Standard items load from `ensureStandardReferenceData` (seed, or the Organization Admin button "Load standard reference data"; idempotent). Admins can add categories (standard or department-specific), units and systems and deactivate them; deactivated items stay on existing activities. Category definition text is stored once (not per language) and feeds the guide now and AI later.
+- **Systems are a managed list**, not free text, so later analysis can compare systems reliably.
+- **Import.** Excel (.xlsx) and CSV through one library (`exceljs`). Template columns are fixed (no column guessing). Parsing is pure and reuses the same Zod schema as the form. The preview reports row-level errors and duplicate-name warnings; only rows without errors are imported, and the server re-validates every row on confirm (the client is not trusted). Limits: 1 MB, 200 rows.
+- **Not verified on Railway yet:** the migration, the Excel upload through a server action (body size limit raised to 2 MB), and the client-side form state handling.

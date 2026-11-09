@@ -576,6 +576,7 @@ export async function getCampaignDetail(actor: Actor, campaignId: string) {
     // Names and per-person data only for the authorized manager view.
     participants: canManage ? participants : [],
     participantCount: participants.filter((p) => p.status === "ACTIVE").length,
+    mappingCompletedCount: participants.filter((p) => p.status === "ACTIVE" && p.mappingCompletedAt !== null).length,
     acknowledgementCount,
     addableEmployees: canManage ? dept.filter((m) => !participantIds.has(m.userId)).map((m) => m.user) : [],
     endDateChanges: endDateChanges.map((a) => {

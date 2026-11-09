@@ -40,7 +40,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <nav className="flex gap-6 border-b border-gray-200 px-6 py-2 text-sm">
             <Link href="/">{t("home")}</Link>
             <Link href="/campaigns">{t("campaigns")}</Link>
+            {user.actor.role === "EMPLOYEE" && <Link href="/mapping">{t("myMapping")}</Link>}
+            <Link href="/categories">{t("categoryGuide")}</Link>
             <Link href="/admin/departments">{t("departments")}</Link>
+            {user.actor.role === "ADMIN" && <Link href="/admin/reference">{t("referenceData")}</Link>}
           </nav>
         )}
         <main className="mx-auto max-w-4xl p-6">{children}</main>

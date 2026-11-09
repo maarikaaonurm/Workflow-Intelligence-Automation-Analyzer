@@ -44,14 +44,83 @@ enum ParticipantStatus {
   EXCLUDED
 }
 
+enum Frequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  AD_HOC
+}
+
+enum OutputRecipient {
+  MANAGER
+  OTHER_DEPARTMENT
+  CUSTOMER
+  AUTHORITY
+  EXTERNAL_PARTY
+  SYSTEM
+  SELF
+  UNKNOWN
+  OTHER
+}
+
+enum AutomationLevel {
+  MANUAL
+  PARTIAL
+  AUTOMATED
+}
+
+enum Degree {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ExceptionFrequency {
+  RARE
+  OCCASIONAL
+  FREQUENT
+  ALMOST_EVERY_CASE
+  NOT_SURE
+}
+
+enum OccurrenceLevel {
+  NONE
+  SOMETIMES
+  OFTEN
+}
+
+enum Seasonality {
+  EVEN
+  START_OF_MONTH
+  END_OF_MONTH
+  QUARTER_END
+  YEAR_END
+  OTHER
+}
+
+enum SensitiveCategory {
+  PERSONAL
+  HEALTH
+  FINANCIAL
+  CONFIDENTIAL
+  CREDENTIALS
+  OTHER
+  NONE
+}
+
 model Organization {
-  id          String             @id @default(cuid())
-  name        String
-  createdAt   DateTime           @default(now())
-  departments Department[]
-  users       User[]
-  auditLogs   AuditLog[]
-  campaigns   AnalysisCampaign[]
+  id                 String             @id @default(cuid())
+  name               String
+  createdAt          DateTime           @default(now())
+  departments        Department[]
+  users              User[]
+  auditLogs          AuditLog[]
+  campaigns          AnalysisCampaign[]
+  activityCategories ActivityCategory[]
+  volumeUnits        VolumeUnit[]
+  systemReferences   SystemReference[]
 }
 
 model Department {
@@ -148,18 +217,21 @@ model AnalysisCampaign {
 }
 
 model CampaignParticipant {
-  id            String                            @id @default(cuid())
-  campaignId    String
-  userId        String
+  id                 String                            @id @default(cuid())
+  campaignId         String
+  userId             String
   // Observation for this participant starts here (campaign start, or the join date for late participants).
-  joinedAt      DateTime                          @db.Date
-  status        ParticipantStatus                 @default(ACTIVE)
-  removedAt     DateTime?
-  removedById   String?
-  campaign      AnalysisCampaign                  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  user          User                              @relation(fields: [userId], references: [id])
-  excludedDates CampaignParticipantExcludedDate[]
-  periods       CampaignParticipationPeriod[]
+  joinedAt           DateTime                          @db.Date
+  status             ParticipantStatus                 @default(ACTIVE)
+  removedAt          DateTime?
+  removedById        String?
+  campaign           AnalysisCampaign                  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user               User                              @relation(fields: [userId], references: [id])
+  excludedDates      CampaignParticipantExcludedDate[]
+  periods            CampaignParticipationPeriod[]
+  // Set when the participant completes Initial Activity Mapping; activity versions then become the baseline.
+  mappingCompletedAt DateTime?
+  activities         InitialActivity[]
 
   @@unique([campaignId, userId])
 }
@@ -220,4 +292,101 @@ model CampaignParticipationPeriod {
   participant   CampaignParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
   @@index([participantId, startDate])
+}
+
+// Standard categories have departmentId = null; Organization Admins can add department-specific ones.
+// The same definition text feeds the Activity Category Guide and (later) AI classification.
+model ActivityCategory {
+  id               String                   @id @default(cuid())
+  organizationId   String
+  departmentId     String?
+  nameEn           String
+  nameEt           String
+  definition       String
+  belongsHere      String
+  notBelongsHere   String
+  boundaryExamples String?
+  active           Boolean                  @default(true)
+  createdAt        DateTime                 @default(now())
+  organization     Organization             @relation(fields: [organizationId], references: [id])
+  versions         InitialActivityVersion[]
+
+  @@unique([organizationId, departmentId, nameEn])
+}
+
+model VolumeUnit {
+  id             String                   @id @default(cuid())
+  organizationId String
+  key            String
+  nameEn         String
+  nameEt         String
+  active         Boolean                  @default(true)
+  organization   Organization             @relation(fields: [organizationId], references: [id])
+  versions       InitialActivityVersion[]
+
+  @@unique([organizationId, key])
+}
+
+model SystemReference {
+  id             String                   @id @default(cuid())
+  organizationId String
+  name           String
+  active         Boolean                  @default(true)
+  organization   Organization             @relation(fields: [organizationId], references: [id])
+  versions       InitialActivityVersion[]
+
+  @@unique([organizationId, name])
+}
+
+// One recurring activity of one participant in one campaign. Its content lives in versions.
+model InitialActivity {
+  id            String                   @id @default(cuid())
+  campaignId    String
+  participantId String
+  createdAt     DateTime                 @default(now())
+  participant   CampaignParticipant      @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  versions      InitialActivityVersion[]
+
+  @@index([campaignId, participantId])
+}
+
+// While the mapping is a draft, version 1 is edited in place. Completing the mapping marks
+// version 1 as the baseline; later edits add a new version and never overwrite the baseline.
+model InitialActivityVersion {
+  id                     String              @id @default(cuid())
+  activityId             String
+  versionNumber          Int
+  isBaseline             Boolean             @default(false)
+  createdById            String
+  createdAt              DateTime            @default(now())
+  name                   String
+  description            String
+  purpose                String
+  outputRecipient        OutputRecipient
+  primaryCategoryId      String
+  tags                   String[]
+  frequency              Frequency
+  // Occurrences per frequency period (for AD_HOC: per month).
+  occurrenceCount        Int
+  avgDurationMinutes     Int
+  volume                 Float?
+  volumeUnitId           String?
+  automationLevel        AutomationLevel
+  ruleBasedDegree        Degree
+  judgementDegree        Degree
+  exceptionFrequency     ExceptionFrequency
+  dataManuallyCopied     Boolean
+  needsInfoFromOthers    Boolean
+  waiting                OccurrenceLevel
+  rework                 OccurrenceLevel
+  seasonality            Seasonality
+  sensitiveData          SensitiveCategory[]
+  improvementOpportunity Boolean             @default(false)
+  employeeSuggestion     String?
+  activity               InitialActivity     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  primaryCategory        ActivityCategory    @relation(fields: [primaryCategoryId], references: [id])
+  volumeUnit             VolumeUnit?         @relation(fields: [volumeUnitId], references: [id])
+  systems                SystemReference[]
+
+  @@unique([activityId, versionNumber])
 }

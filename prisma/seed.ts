@@ -1,5 +1,6 @@
 // Synthetic demo data only. All names, companies and emails are fictional.
 import { PrismaClient, type DepartmentRole } from "@prisma/client";
+import { ensureStandardReferenceData } from "../src/lib/reference/standard";
 
 const db = new PrismaClient();
 
@@ -26,6 +27,8 @@ function email(name: string): string {
 async function main() {
   let org = await db.organization.findFirst({ where: { name: ORG_NAME } });
   if (!org) org = await db.organization.create({ data: { name: ORG_NAME } });
+
+  await ensureStandardReferenceData(db, org.id);
 
   await db.user.upsert({
     where: { email: "admin@demo.example" },

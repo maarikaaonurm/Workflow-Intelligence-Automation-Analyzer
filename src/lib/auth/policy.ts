@@ -16,6 +16,8 @@ export type Action =
   | "campaign:manage"
   | "campaign:view"
   | "campaign:acknowledge"
+  | "mapping:write"
+  | "reference:manage"
   | "campaign:reopen"
   | "diary:read"
   | "analysis:view"
@@ -57,6 +59,11 @@ export function can(actor: Actor, action: Action, resource: Resource): boolean {
       return actor.role === "ADMIN" || sameDepartment;
     case "campaign:acknowledge":
       return actor.role === "EMPLOYEE" && sameDepartment;
+    case "mapping:write":
+      // An Employee's own Initial Activity Mapping; managers get a separate, read-only status view.
+      return actor.role === "EMPLOYEE" && resource.ownerId === actor.id && sameDepartment;
+    case "reference:manage":
+      return actor.role === "ADMIN";
     case "diary:read":
       // Only the owner sees detailed diary data in Phase 4; manager department
       // drill-downs get their own authorized view later.

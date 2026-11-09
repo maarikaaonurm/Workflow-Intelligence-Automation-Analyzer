@@ -68,7 +68,7 @@ export default async function CampaignPage({
       )}
 
       <p className="text-sm">
-        {t("participantCount")}: {d.participantCount} · {t("acknowledgements")}: {d.acknowledgementCount} / {d.participantCount}
+        {t("participantCount")}: {d.participantCount} · {t("acknowledgements")}: {d.acknowledgementCount} / {d.participantCount} · {t("mappingReadiness")}: {d.mappingCompletedCount} / {d.participantCount}
       </p>
 
       {d.own && (

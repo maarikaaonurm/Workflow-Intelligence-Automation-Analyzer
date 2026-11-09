@@ -7,3 +7,5 @@
 
 ## Service tests with a fake database
 `src/lib/services/participants.test.ts` runs `removeParticipant` and `restoreParticipant` against an in-memory stand-in for the Prisma transaction client. It covers authorization (Employee, other department's manager and Organization Admin are forbidden), locked and other closed states, already-active participants, inactive users, new-period creation, preserved history, audit events and a remove-then-restore sequence. It does not exercise real SQL constraints (such as the one-open-period index); those run on Railway.
+
+`src/lib/services/mapping.test.ts` does the same for the mapping service: draft edits in place, new versions after completion with the baseline untouched, acknowledgement-first, manager and other-employee access denied, closed campaigns, unknown references and delete rules. `src/lib/mapping/mapping.test.ts` covers the input schema (sensitive-data exclusivity, volume/unit pairing), form parsing, the import parser (row errors, duplicate warnings, empty rows) and CSV/Excel reading including an Excel template round trip.

@@ -58,4 +58,19 @@ describe("authorization policy", () => {
     expect(can(manager, "campaign:acknowledge", acc)).toBe(false);
     expect(can(employee, "campaign:view", { organizationId: org, departmentId: "hr" })).toBe(false);
   });
+
+  it("lets only the owning Employee write their Initial Activity Mapping", () => {
+    const own = { organizationId: org, departmentId: "acc", ownerId: "e1" };
+    expect(can(employee, "mapping:write", own)).toBe(true);
+    expect(can(employee, "mapping:write", { ...own, ownerId: "e2" })).toBe(false);
+    expect(can(manager, "mapping:write", own)).toBe(false);
+    expect(can(admin, "mapping:write", own)).toBe(false);
+  });
+
+  it("lets only the Organization Admin manage reference data", () => {
+    const r = { organizationId: org };
+    expect(can(admin, "reference:manage", r)).toBe(true);
+    expect(can(manager, "reference:manage", r)).toBe(false);
+    expect(can(employee, "reference:manage", r)).toBe(false);
+  });
 });
