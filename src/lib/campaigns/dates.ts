@@ -79,24 +79,39 @@ export function weekdaysBetween(from: string, to: string): string[] {
   return result;
 }
 
+/** Active over [start, inactiveFrom); inactiveFrom is the first inactive day (null = still active). */
+export interface ParticipationPeriod {
+  start: string;
+  inactiveFrom: string | null;
+}
+
 export interface ObservationWindow {
   campaignStart: string;
   campaignEnd: string;
-  /** Participant's own start (campaign start, or the late join date). */
-  joinedAt: string;
-  /** Date participation stopped, when the participant was removed. */
-  stoppedAt?: string | null;
+  /** The participant's active periods: the initial/late-join period plus any restorations. */
+  periods: ParticipationPeriod[];
   /** Optional upper bound, e.g. today for a preliminary analysis. */
   through?: string | null;
 }
 
-/** Weekdays in the participant's observation range, including excluded ones. */
+/**
+ * Weekdays on which the participant was actively part of the campaign, including
+ * absent ones. Inactive gaps between periods never count.
+ */
 export function observationDates(w: ObservationWindow): string[] {
-  const from = w.joinedAt > w.campaignStart ? w.joinedAt : w.campaignStart;
-  let to = w.campaignEnd;
-  if (w.stoppedAt && w.stoppedAt < to) to = w.stoppedAt;
-  if (w.through && w.through < to) to = w.through;
-  return from > to ? [] : weekdaysBetween(from, to);
+  const dates = new Set<string>();
+  for (const period of w.periods) {
+    const from = period.start > w.campaignStart ? period.start : w.campaignStart;
+    let to = w.campaignEnd;
+    if (period.inactiveFrom) {
+      const lastActive = addDays(period.inactiveFrom, -1);
+      if (lastActive < to) to = lastActive;
+    }
+    if (w.through && w.through < to) to = w.through;
+    if (from > to) continue;
+    for (const d of weekdaysBetween(from, to)) dates.add(d);
+  }
+  return [...dates].sort();
 }
 
 export interface CoverageSummary {

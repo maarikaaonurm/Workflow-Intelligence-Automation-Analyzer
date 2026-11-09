@@ -14,3 +14,5 @@ Normalized PostgreSQL via Prisma. The entity list follows the master prompt (sec
 - Pseudonym map (Employee_NN to user) lives only in the database, per campaign.
 
 Phase 1 tables: Organization, Department, User, DepartmentMembership, AuditLog.
+
+Phase 2 tables: AnalysisCampaign, CampaignParticipant, CampaignParticipationPeriod (participation history, one open period max), CampaignParticipantExcludedDate, CampaignAcknowledgement, ReminderPreference. Campaign end-date history lives in AuditLog.

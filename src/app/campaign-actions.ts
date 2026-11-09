@@ -16,6 +16,7 @@ import {
   lockCampaign,
   reopenCampaign,
   removeParticipant,
+  restoreParticipant,
   setExcludedDate,
   setReminderPreference,
 } from "@/lib/services/campaigns";
@@ -30,6 +31,14 @@ async function attempt(returnTo: string, fn: () => Promise<void>, onSuccess: () 
     throw e;
   }
   redirect(onSuccess());
+}
+
+/**
+ * Consequential actions only run when the form carries confirmed=yes, which the
+ * confirmation page adds. Anything else is sent to that page first.
+ */
+function requireConfirmation(formData: FormData, confirmPath: string): void {
+  if (formData.get("confirmed") !== "yes") redirect(confirmPath);
 }
 
 const id = z.string().min(1);
@@ -68,12 +77,14 @@ export async function launchCampaignAction(formData: FormData) {
 export async function cancelCampaignAction(formData: FormData) {
   const { actor } = await requireUser();
   const campaignId = id.parse(formData.get("campaignId"));
+  requireConfirmation(formData, `/campaigns/${campaignId}/confirm?action=cancel`);
   await attempt(`/campaigns/${campaignId}`, () => cancelCampaign(actor, campaignId));
 }
 
 export async function lockCampaignAction(formData: FormData) {
   const { actor } = await requireUser();
   const campaignId = id.parse(formData.get("campaignId"));
+  requireConfirmation(formData, `/campaigns/${campaignId}/confirm?action=lock`);
   await attempt(`/campaigns/${campaignId}`, () => lockCampaign(actor, campaignId));
 }
 
@@ -101,7 +112,17 @@ export async function removeParticipantAction(formData: FormData) {
   const campaignId = id.parse(formData.get("campaignId"));
   const participantId = id.parse(formData.get("participantId"));
   const mode = z.enum(["STOP_KEEP_DATA", "EXCLUDE_DATA"]).parse(formData.get("mode"));
+  const action = mode === "EXCLUDE_DATA" ? "exclude" : "stop";
+  requireConfirmation(formData, `/campaigns/${campaignId}/confirm?action=${action}&participantId=${participantId}`);
   await attempt(`/campaigns/${campaignId}`, () => removeParticipant(actor, campaignId, participantId, mode));
+}
+
+export async function restoreParticipantAction(formData: FormData) {
+  const { actor } = await requireUser();
+  const campaignId = id.parse(formData.get("campaignId"));
+  const participantId = id.parse(formData.get("participantId"));
+  requireConfirmation(formData, `/campaigns/${campaignId}/confirm?action=restore&participantId=${participantId}`);
+  await attempt(`/campaigns/${campaignId}`, () => restoreParticipant(actor, campaignId, participantId));
 }
 
 export async function setExcludedDateAction(formData: FormData) {

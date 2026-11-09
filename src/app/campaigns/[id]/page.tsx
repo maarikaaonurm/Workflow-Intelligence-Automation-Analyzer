@@ -4,15 +4,13 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { getT } from "@/lib/i18n/server";
 import { getCampaignDetail } from "@/lib/services/campaigns";
 import { toISODate } from "@/lib/campaigns/dates";
+import { canRemoveParticipant, canRestoreParticipant } from "@/lib/campaigns/participation";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import {
   addParticipantAction,
-  cancelCampaignAction,
   changeEndDateAction,
   clearExcludedDateAction,
   launchCampaignAction,
-  lockCampaignAction,
-  removeParticipantAction,
   reopenCampaignAction,
   setExcludedDateAction,
   setReminderAction,
@@ -104,17 +102,13 @@ export default async function CampaignPage({
               </form>
             )}
             {status === "REVIEW_WINDOW" && (
-              <form action={lockCampaignAction} className="flex items-center gap-3">
-                <input type="hidden" name="campaignId" value={id} />
-                <button className={primary}>{t("lockCampaign")}</button>
+              <div className="flex items-center gap-3">
+                <Link href={`/campaigns/${id}/confirm?action=lock`} className={primary}>{t("lockCampaign")}</Link>
                 <span className="text-sm text-gray-600">{t("lockWarning")}</span>
-              </form>
+              </div>
             )}
             {cancellable && (
-              <form action={cancelCampaignAction}>
-                <input type="hidden" name="campaignId" value={id} />
-                <button className={secondary}>{t("cancelCampaign")}</button>
-              </form>
+              <Link href={`/campaigns/${id}/confirm?action=cancel`} className={secondary}>{t("cancelCampaign")}</Link>
             )}
           </div>
 
@@ -153,21 +147,42 @@ export default async function CampaignPage({
                     <span>
                       {p.user.name} <span className="text-sm text-gray-500">· {t(`participant${p.status}`)} · {toISODate(p.joinedAt)}</span>
                     </span>
-                    {p.status === "ACTIVE" && status !== "LOCKED" && (
-                      <form action={removeParticipantAction} className="flex gap-2">
-                        <input type="hidden" name="campaignId" value={id} />
-                        <input type="hidden" name="participantId" value={p.id} />
-                        {status === "DRAFT" ? (
-                          <button name="mode" value="STOP_KEEP_DATA" className={secondary}>{t("remove")}</button>
-                        ) : (
-                          <>
-                            <button name="mode" value="STOP_KEEP_DATA" className={secondary}>{t("removeStopKeep")}</button>
-                            <button name="mode" value="EXCLUDE_DATA" className={secondary}>{t("removeExclude")}</button>
-                          </>
-                        )}
-                      </form>
-                    )}
+                    <div className="flex gap-2">
+                      {p.status === "ACTIVE" && (status === "DRAFT" || canRemoveParticipant(status, p.status)) && (
+                        <>
+                          <Link href={`/campaigns/${id}/confirm?action=stop&participantId=${p.id}`} className={secondary}>
+                            {status === "DRAFT" ? t("remove") : t("removeStopKeep")}
+                          </Link>
+                          {status !== "DRAFT" && (
+                            <Link href={`/campaigns/${id}/confirm?action=exclude&participantId=${p.id}`} className={secondary}>
+                              {t("removeExclude")}
+                            </Link>
+                          )}
+                        </>
+                      )}
+                      {canRestoreParticipant(status, p.status) && (
+                        <Link href={`/campaigns/${id}/confirm?action=restore&participantId=${p.id}`} className={primary}>
+                          {t("restoreParticipant")}
+                        </Link>
+                      )}
+                    </div>
                   </div>
+                  {status !== "DRAFT" && p.periods.length > 0 && (
+                    <div className="text-sm text-gray-600">
+                      <span className="font-medium">{t("participationHistory")}:</span>
+                      <ul className="list-disc pl-5">
+                        {p.periods.map((period) => (
+                          <li key={period.id}>
+                            {t(`period${period.startedKind}`)} {toISODate(period.startDate)}
+                            {period.inactiveFrom && period.endMode
+                              ? ` → ${t(`end${period.endMode}`)} ${toISODate(period.inactiveFrom)}`
+                              : ""}
+                          </li>
+                        ))}
+                      </ul>
+                      {p.periods.length > 1 || p.status !== "ACTIVE" ? <p className="text-xs">{t("historyNote")}</p> : null}
+                    </div>
+                  )}
                   {status !== "DRAFT" && p.status === "ACTIVE" && (
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <span className="text-gray-600">{t("absentDays")}:</span>

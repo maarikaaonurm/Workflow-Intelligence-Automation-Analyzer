@@ -1,4 +1,4 @@
-import { Prisma, type AnalysisCampaign } from "@prisma/client";
+import { Prisma, type AnalysisCampaign, type RemovalMode } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
@@ -12,6 +12,7 @@ import {
   validateCampaignPeriod,
   validateEndDateChange,
 } from "@/lib/campaigns/dates";
+import { canRemoveParticipant, canRestoreParticipant, effectiveDate } from "@/lib/campaigns/participation";
 import { autoTransition, canTransition, OBSERVATION_STATUSES, type CampaignStatus } from "@/lib/campaigns/status";
 
 /** Bump when the "About This Analysis" text changes; stored with each acknowledgement. */
@@ -82,9 +83,16 @@ export async function createCampaign(actor: Actor, input: CreateCampaignInput) {
     const employees = await tx.departmentMembership.findMany({
       where: { departmentId: department.id, active: true, role: "EMPLOYEE", user: { active: true } },
     });
-    await tx.campaignParticipant.createMany({
-      data: employees.map((m) => ({ campaignId: campaign.id, userId: m.userId, joinedAt: campaign.startDate })),
-    });
+    for (const m of employees) {
+      await tx.campaignParticipant.create({
+        data: {
+          campaignId: campaign.id,
+          userId: m.userId,
+          joinedAt: campaign.startDate,
+          periods: { create: { startDate: campaign.startDate, startedKind: "INITIAL", startedById: actor.id } },
+        },
+      });
+    }
     await writeAudit(tx, {
       organizationId: department.organizationId,
       departmentId: department.id,
@@ -278,7 +286,15 @@ export async function addParticipant(actor: Actor, campaignId: string, userId: s
     const today = todayISO();
     const start = toISODate(campaign.startDate);
     const joinedAt = campaign.status === "DRAFT" || today < start ? campaign.startDate : fromISODate(today);
-    const participant = await tx.campaignParticipant.create({ data: { campaignId, userId, joinedAt } });
+    const startedKind = campaign.status === "DRAFT" || today < start ? "INITIAL" : "LATE_JOIN";
+    const participant = await tx.campaignParticipant.create({
+      data: {
+        campaignId,
+        userId,
+        joinedAt,
+        periods: { create: { startDate: joinedAt, startedKind, startedById: actor.id } },
+      },
+    });
     await writeAudit(tx, {
       organizationId: campaign.organizationId,
       departmentId: campaign.departmentId,
@@ -292,12 +308,11 @@ export async function addParticipant(actor: Actor, campaignId: string, userId: s
   });
 }
 
-export type RemovalMode = "STOP_KEEP_DATA" | "EXCLUDE_DATA";
-
 /**
  * Before launch the participant row is simply deleted (no data exists yet). After
- * launch nothing is deleted: the participant is stopped (data stays in the
- * analysis) or excluded (participant and data are left out of the Final Analysis).
+ * launch nothing is deleted: the open participation period is closed and the
+ * participant is stopped (data stays in the analysis) or excluded (participant and
+ * data are left out of the Final Analysis). Either can be undone with restoreParticipant.
  */
 export async function removeParticipant(actor: Actor, campaignId: string, participantId: string, mode: RemovalMode) {
   await db.$transaction(async (tx) => {
@@ -307,18 +322,36 @@ export async function removeParticipant(actor: Actor, campaignId: string, partic
 
     if (campaign.status === "DRAFT") {
       await tx.campaignParticipant.delete({ where: { id: participantId } });
-    } else {
-      if (!["INITIAL_MAPPING", "ACTIVE", "REVIEW_WINDOW"].includes(campaign.status)) throw new AppError("errCampaignClosed");
-      if (participant.status !== "ACTIVE") throw new AppError("errAlreadyRemoved");
-      await tx.campaignParticipant.update({
-        where: { id: participantId },
-        data: {
-          status: mode === "EXCLUDE_DATA" ? "EXCLUDED" : "STOPPED",
-          removedAt: new Date(),
-          removedById: actor.id,
-        },
+      await writeAudit(tx, {
+        organizationId: campaign.organizationId,
+        departmentId: campaign.departmentId,
+        campaignId,
+        actorId: actor.id,
+        action: "campaign.participantRemoved",
+        targetType: "CampaignParticipant",
+        targetId: participantId,
+        metadata: { userId: participant.userId, beforeLaunch: true },
       });
+      return;
     }
+
+    if (!canRemoveParticipant(campaign.status, participant.status)) {
+      throw new AppError(participant.status === "ACTIVE" ? "errCampaignClosed" : "errAlreadyRemoved");
+    }
+    const open = await tx.campaignParticipationPeriod.findFirst({ where: { participantId, inactiveFrom: null } });
+    if (!open) throw new Error("Active participant has no open participation period");
+
+    const effective = effectiveDate(toISODate(campaign.startDate), todayISO());
+    const inactiveFrom = effective < toISODate(open.startDate) ? open.startDate : fromISODate(effective);
+    const now = new Date();
+    await tx.campaignParticipationPeriod.update({
+      where: { id: open.id },
+      data: { inactiveFrom, endMode: mode, endedById: actor.id, endedAt: now },
+    });
+    await tx.campaignParticipant.update({
+      where: { id: participantId },
+      data: { status: mode === "EXCLUDE_DATA" ? "EXCLUDED" : "STOPPED", removedAt: now, removedById: actor.id },
+    });
     await writeAudit(tx, {
       organizationId: campaign.organizationId,
       departmentId: campaign.departmentId,
@@ -327,9 +360,71 @@ export async function removeParticipant(actor: Actor, campaignId: string, partic
       action: "campaign.participantRemoved",
       targetType: "CampaignParticipant",
       targetId: participantId,
-      metadata: { mode, userId: participant.userId, beforeLaunch: campaign.status === "DRAFT" },
+      metadata: { mode, userId: participant.userId, inactiveFrom: toISODate(inactiveFrom), beforeLaunch: false },
     });
   });
+}
+
+/**
+ * Restores a stopped or excluded participant by opening a NEW participation period
+ * starting on the effective date. Earlier periods, the removal mode and the audit
+ * trail are kept; the inactive gap never counts as expected or missing diary days.
+ * Not allowed once the campaign is locked.
+ */
+export async function restoreParticipant(actor: Actor, campaignId: string, participantId: string) {
+  try {
+    await db.$transaction(async (tx) => {
+      const campaign = await loadManaged(tx, actor, campaignId);
+      const participant = await tx.campaignParticipant.findFirst({ where: { id: participantId, campaignId } });
+      if (!participant) throw new AppError("errNotFound");
+      if (participant.status === "ACTIVE") throw new AppError("errNotRemoved");
+      if (!canRestoreParticipant(campaign.status, participant.status)) throw new AppError("errCampaignClosed");
+
+      const membership = await tx.departmentMembership.findFirst({
+        where: {
+          userId: participant.userId,
+          departmentId: campaign.departmentId,
+          active: true,
+          role: "EMPLOYEE",
+          user: { active: true },
+        },
+      });
+      if (!membership) throw new AppError("errNotDepartmentEmployee");
+
+      const previous = await tx.campaignParticipationPeriod.findFirst({
+        where: { participantId },
+        orderBy: [{ startDate: "desc" }, { startedAt: "desc" }],
+      });
+      const restoredFrom = effectiveDate(toISODate(campaign.startDate), todayISO());
+      await tx.campaignParticipationPeriod.create({
+        data: { participantId, startDate: fromISODate(restoredFrom), startedKind: "RESTORED", startedById: actor.id },
+      });
+      await tx.campaignParticipant.update({
+        where: { id: participantId },
+        data: { status: "ACTIVE", removedAt: null, removedById: null },
+      });
+      await writeAudit(tx, {
+        organizationId: campaign.organizationId,
+        departmentId: campaign.departmentId,
+        campaignId,
+        actorId: actor.id,
+        action: "campaign.participantRestored",
+        targetType: "CampaignParticipant",
+        targetId: participantId,
+        metadata: {
+          userId: participant.userId,
+          restoredFrom,
+          previousStatus: participant.status,
+          previousMode: previous?.endMode ?? null,
+          previousInactiveFrom: previous?.inactiveFrom ? toISODate(previous.inactiveFrom) : null,
+        },
+      });
+    });
+  } catch (e) {
+    // The partial unique index allows only one open period: a concurrent restore lost the race.
+    if (isUniqueViolation(e)) throw new AppError("errNotRemoved");
+    throw e;
+  }
 }
 
 /** Marks a date Out of Scope / Absent for a participant. No reason is collected. */
@@ -450,7 +545,7 @@ export async function getCampaignDetail(actor: Actor, campaignId: string) {
   const [participants, acknowledgementCount, endDateChanges, own] = await Promise.all([
     db.campaignParticipant.findMany({
       where: { campaignId },
-      include: { user: true, excludedDates: { orderBy: { date: "asc" } } },
+      include: { user: true, excludedDates: { orderBy: { date: "asc" } }, periods: { orderBy: { startDate: "asc" } } },
       orderBy: { user: { name: "asc" } },
     }),
     db.campaignAcknowledgement.count({ where: { campaignId } }),

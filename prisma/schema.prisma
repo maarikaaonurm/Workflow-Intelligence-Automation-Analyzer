@@ -25,6 +25,17 @@ enum CampaignStatus {
   CANCELLED
 }
 
+enum PeriodStartKind {
+  INITIAL
+  LATE_JOIN
+  RESTORED
+}
+
+enum RemovalMode {
+  STOP_KEEP_DATA
+  EXCLUDE_DATA
+}
+
 enum ParticipantStatus {
   ACTIVE
   // Stopped: no future participation, existing data stays in the analysis.
@@ -148,6 +159,7 @@ model CampaignParticipant {
   campaign      AnalysisCampaign                  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   user          User                              @relation(fields: [userId], references: [id])
   excludedDates CampaignParticipantExcludedDate[]
+  periods       CampaignParticipationPeriod[]
 
   @@unique([campaignId, userId])
 }
@@ -187,4 +199,25 @@ model ReminderPreference {
   user       User             @relation(fields: [userId], references: [id])
 
   @@unique([campaignId, userId])
+}
+
+// History of when a participant was actively part of the campaign. A removal closes
+// the open period; a restoration opens a new one. Rows are never deleted or rewritten
+// except to close the open period, so the interruption stays understandable.
+// Active over [startDate, inactiveFrom); inactiveFrom is the first inactive day.
+// At most one open period per participant: partial unique index in the migration SQL.
+model CampaignParticipationPeriod {
+  id            String              @id @default(cuid())
+  participantId String
+  startDate     DateTime            @db.Date
+  startedKind   PeriodStartKind
+  startedById   String?
+  startedAt     DateTime            @default(now())
+  inactiveFrom  DateTime?           @db.Date
+  endMode       RemovalMode?
+  endedById     String?
+  endedAt       DateTime?
+  participant   CampaignParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([participantId, startDate])
 }

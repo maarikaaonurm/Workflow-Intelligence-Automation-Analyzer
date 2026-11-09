@@ -37,7 +37,11 @@ describe("validateEndDateChange", () => {
 });
 
 describe("observation dates and coverage", () => {
-  const window = { campaignStart: "2026-11-02", campaignEnd: "2026-11-13", joinedAt: "2026-11-02" };
+  const window = {
+    campaignStart: "2026-11-02",
+    campaignEnd: "2026-11-13",
+    periods: [{ start: "2026-11-02", inactiveFrom: null }],
+  };
 
   it("counts only weekdays", () => {
     expect(weekdaysBetween("2026-11-06", "2026-11-09")).toEqual(["2026-11-06", "2026-11-09"]);
@@ -45,11 +49,15 @@ describe("observation dates and coverage", () => {
   });
 
   it("starts a late participant on their join date", () => {
-    expect(observationDates({ ...window, joinedAt: "2026-11-09" })).toHaveLength(5);
+    expect(observationDates({ ...window, periods: [{ start: "2026-11-09", inactiveFrom: null }] })).toHaveLength(5);
   });
 
-  it("ends at the stop date and at the optional upper bound", () => {
-    expect(observationDates({ ...window, stoppedAt: "2026-11-04" })).toEqual(["2026-11-02", "2026-11-03", "2026-11-04"]);
+  it("ends on the day before the first inactive day and at the optional upper bound", () => {
+    expect(observationDates({ ...window, periods: [{ start: "2026-11-02", inactiveFrom: "2026-11-05" }] })).toEqual([
+      "2026-11-02",
+      "2026-11-03",
+      "2026-11-04",
+    ]);
     expect(observationDates({ ...window, through: "2026-11-03" })).toHaveLength(2);
   });
 
