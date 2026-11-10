@@ -19,7 +19,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang={locale}>
-      <body className="min-h-screen bg-white antialiased">
+      <body className="flex min-h-screen flex-col bg-white antialiased">
         <header className="flex items-center justify-between border-b border-gray-200 bg-surface px-6 py-3">
           <span className="font-semibold text-primary">{t("appName")}</span>
           <div className="flex items-center gap-4 text-sm">
@@ -67,7 +67,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Link href="/categories">{t("categoryGuide")}</Link>
           </nav>
         )}
-        <main className="mx-auto max-w-4xl p-6">{children}</main>
+        <main className="mx-auto w-full max-w-4xl flex-1 p-6">{children}</main>
+        {/* Same text in both languages: it is the product name and a credit line. */}
+        <footer className="border-t border-gray-200 bg-surface px-6 py-3 text-center text-xs text-gray-500">
+          © 2026 Workflow Intelligence &amp; Automation Analyzer. Built with Claude Code.
+        </footer>
       </body>
     </html>
   );
