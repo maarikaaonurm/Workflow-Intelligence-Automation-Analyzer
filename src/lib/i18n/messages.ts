@@ -289,7 +289,7 @@ const en = {
   activeMembers: "Active members",
   manageMembers: "Manage members",
   assignChangeManager: "Assign / Change manager",
-  managerHelp: "Choose any active user. If they belong to another department they are moved here. The previous manager stays as an Employee.",
+  managerHelp: "Choose any active user. Existing members of other departments are transferred here after you confirm. The previous manager stays as an Employee.",
   addMember: "Add member",
   addMemberHelp: "Choose an existing user (they are moved from their current department) or",
   noMembers: "This department has no members yet.",
@@ -299,6 +299,36 @@ const en = {
   errUserAlreadyActive: "The user is already active.",
   errCannotDeactivateAdmin: "Administrator accounts cannot be deactivated here.",
   errCampaignImpact: "This user takes part in a campaign. Confirm that campaign participation is handled separately.",
+  createNewUserSection: "Create new user",
+  createNewUserHelp: "Creates a brand-new person in this department. Use the section below for someone who already exists.",
+  addTransferSection: "Add / transfer existing user",
+  addTransferHelp: "Choose an existing active user. If they already belong to another department this is a transfer. Nothing changes until you confirm on the next page.",
+  searchUsers: "Search by name",
+  noMatches: "No matching users.",
+  groupAvailable: "Available / no active department",
+  thisDepartment: "this department",
+  currentDepartment: "Current department",
+  currentRole: "Current role",
+  noActiveDepartment: "No active department",
+  reviewChange: "Review change",
+  nothingChangesYet: "Nothing changes until you confirm on the next page.",
+  transferTitle: "Transfer employee to {to}?",
+  transferBelongs: "{user} currently belongs to {from}.",
+  transferEffect: "Continuing will end the current {from} membership and create a new {to} membership effective {date}.",
+  transferPreserved: "Historical {from} membership will be preserved.",
+  transferAsManager: "The user will become the Department Manager in the new department.",
+  addToDepartmentTitle: "Add {user} to {to}?",
+  addNoDepartment: "{user} has no active department. A new {to} membership will start on {date}.",
+  makeManagerTitle: "Make {user} Department Manager of {to}?",
+  roleChangeBody: "{user} stays in {to}. The current membership period ends and a new one starts on {date} with the new role. The earlier period is preserved.",
+  managerReplaceNote: "{previous} is the current Department Manager and will become an Employee of {to}.",
+  campaignWarning1: "This employee is currently participating in an active campaign in {from}.",
+  campaignWarning2: "Changing department membership does not automatically change historical or active campaign participation.",
+  campaignWarning3: "Review the participant's campaign status separately.",
+  transferButton: "Transfer employee",
+  addToDepartmentButton: "Add to department",
+  makeManagerButton: "Make Department Manager",
+  cancel: "Cancel",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -591,7 +621,7 @@ const et: Record<MessageKey, string> = {
   activeMembers: "Aktiivseid liikmeid",
   manageMembers: "Halda liikmeid",
   assignChangeManager: "Määra / vaheta juhataja",
-  managerHelp: "Vali mis tahes aktiivne kasutaja. Kui ta kuulub teise osakonda, viiakse ta siia. Eelmine juhataja jääb töötajaks.",
+  managerHelp: "Vali mis tahes aktiivne kasutaja. Teiste osakondade liikmed viiakse siia üle pärast sinu kinnitust. Eelmine juhataja jääb töötajaks.",
   addMember: "Lisa liige",
   addMemberHelp: "Vali olemasolev kasutaja (ta viiakse praegusest osakonnast üle) või",
   noMembers: "Sellel osakonnal pole veel liikmeid.",
@@ -601,6 +631,36 @@ const et: Record<MessageKey, string> = {
   errUserAlreadyActive: "Kasutaja on juba aktiivne.",
   errCannotDeactivateAdmin: "Administraatori kontosid ei saa siin deaktiveerida.",
   errCampaignImpact: "See kasutaja osaleb kampaanias. Kinnita, et kampaanias osalemist käsitletakse eraldi.",
+  createNewUserSection: "Loo uus kasutaja",
+  createNewUserHelp: "Loob selles osakonnas täiesti uue inimese. Juba olemasoleva inimese jaoks kasuta allolevat jaotist.",
+  addTransferSection: "Lisa / vii üle olemasolev kasutaja",
+  addTransferHelp: "Vali olemasolev aktiivne kasutaja. Kui ta kuulub juba teise osakonda, on see ülekanne. Midagi ei muutu enne, kui kinnitad järgmisel lehel.",
+  searchUsers: "Otsi nime järgi",
+  noMatches: "Sobivaid kasutajaid pole.",
+  groupAvailable: "Vaba / aktiivne osakond puudub",
+  thisDepartment: "see osakond",
+  currentDepartment: "Praegune osakond",
+  currentRole: "Praegune roll",
+  noActiveDepartment: "Aktiivset osakonda pole",
+  reviewChange: "Vaata muudatus üle",
+  nothingChangesYet: "Midagi ei muutu enne, kui kinnitad järgmisel lehel.",
+  transferTitle: "Kas viia töötaja üle osakonda {to}?",
+  transferBelongs: "{user} kuulub praegu osakonda {from}.",
+  transferEffect: "Jätkamine lõpetab praeguse {from} liikmelisuse ja loob uue {to} liikmelisuse alates {date}.",
+  transferPreserved: "Varasem {from} liikmelisus säilib.",
+  transferAsManager: "Kasutajast saab uues osakonnas osakonnajuhataja.",
+  addToDepartmentTitle: "Kas lisada {user} osakonda {to}?",
+  addNoDepartment: "Kasutajal {user} pole aktiivset osakonda. Uus {to} liikmelisus algab {date}.",
+  makeManagerTitle: "Kas määrata {user} osakonna {to} juhatajaks?",
+  roleChangeBody: "{user} jääb osakonda {to}. Praegune liikmelisuse periood lõpeb ja uus algab {date} uue rolliga. Varasem periood säilib.",
+  managerReplaceNote: "{previous} on praegune osakonnajuhataja ja temast saab osakonna {to} töötaja.",
+  campaignWarning1: "See töötaja osaleb praegu osakonna {from} aktiivses kampaanias.",
+  campaignWarning2: "Osakonna liikmelisuse muutmine ei muuda automaatselt varasemat ega aktiivset kampaanias osalemist.",
+  campaignWarning3: "Vaata osaleja kampaania staatus eraldi üle.",
+  transferButton: "Vii töötaja üle",
+  addToDepartmentButton: "Lisa osakonda",
+  makeManagerButton: "Määra osakonnajuhatajaks",
+  cancel: "Tühista",
 };
 
 export const messages: Record<Locale, Record<MessageKey, string>> = { en, et };
@@ -611,4 +671,9 @@ export function normalizeLocale(value: string | undefined | null): Locale {
 
 export function translator(locale: Locale) {
   return (key: MessageKey): string => messages[locale][key];
+}
+
+/** Replaces {name} placeholders in a message template. */
+export function fill(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (_, key: string) => vars[key] ?? "");
 }

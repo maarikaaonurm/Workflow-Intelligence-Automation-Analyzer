@@ -3,17 +3,18 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
-import { attempt, formString } from "@/lib/action-helpers";
-import { assignManager } from "@/lib/services/departments";
+import { attempt, formString, safeReturnPath } from "@/lib/action-helpers";
 import { createUser, deactivateUser, reactivateUser, setUserMembership, updateUser } from "@/lib/services/users";
 
 const id = z.string().min(1);
 const role = z.enum(["EMPLOYEE", "MANAGER"]);
 const acknowledged = (f: FormData) => f.get("ackCampaigns") === "on";
 
+/** Creates a brand-new user. From a department page, `departmentId` is preset and `returnTo` leads back there. */
 export async function createUserAction(formData: FormData) {
   const { actor } = await requireUser();
-  await attempt("/admin/users", () =>
+  const returnTo = safeReturnPath(formString(formData, "returnTo"), "/admin/users");
+  await attempt(returnTo, () =>
     createUser(
       actor,
       { firstName: formString(formData, "firstName"), lastName: formString(formData, "lastName"), email: formString(formData, "email") },
@@ -34,16 +35,27 @@ export async function updateUserAction(formData: FormData) {
   );
 }
 
-export async function setMembershipAction(formData: FormData) {
+/**
+ * Adds, transfers or re-roles an existing user. This is the ONLY entry point for moving
+ * an existing user between departments, and it runs only after the confirmation page
+ * (/admin/membership/confirm) has added confirmed=yes. Campaign participation is never touched.
+ */
+export async function confirmMembershipAction(formData: FormData) {
   const { actor } = await requireUser();
   const userId = id.parse(formData.get("userId"));
-  await attempt(`/admin/users/${userId}`, () =>
-    setUserMembership(
-      actor,
-      userId,
-      { departmentId: formString(formData, "departmentId"), role: role.parse(formData.get("role")) },
-      acknowledged(formData),
-    ).then(() => undefined),
+  const departmentId = id.parse(formData.get("departmentId"));
+  const memberRole = role.parse(formData.get("role"));
+  const returnTo = safeReturnPath(formString(formData, "returnTo"), `/admin/users/${userId}`);
+
+  const confirmPath =
+    `/admin/membership/confirm?userId=${encodeURIComponent(userId)}&departmentId=${encodeURIComponent(departmentId)}` +
+    `&role=${memberRole}&returnTo=${encodeURIComponent(returnTo)}`;
+  if (formData.get("confirmed") !== "yes") redirect(confirmPath);
+
+  await attempt(
+    confirmPath,
+    () => setUserMembership(actor, userId, { departmentId, role: memberRole }, acknowledged(formData)).then(() => undefined),
+    returnTo,
   );
 }
 
@@ -60,25 +72,5 @@ export async function reactivateUserAction(formData: FormData) {
   const userId = id.parse(formData.get("userId"));
   await attempt(`/admin/users/${userId}`, () =>
     reactivateUser(actor, userId, { departmentId: formString(formData, "departmentId"), role: role.parse(formData.get("role")) }),
-  );
-}
-
-/** Assign or change a department's manager from any active user; the user is moved here if needed. */
-export async function assignDepartmentManagerAction(formData: FormData) {
-  const { actor } = await requireUser();
-  const departmentId = id.parse(formData.get("departmentId"));
-  const userId = id.parse(formData.get("userId"));
-  await attempt(`/admin/departments/${departmentId}`, () =>
-    assignManager(actor, departmentId, userId, acknowledged(formData)).then(() => undefined),
-  );
-}
-
-/** Add a user to a department (moving them from their current one) as Employee or Manager. */
-export async function addDepartmentMemberAction(formData: FormData) {
-  const { actor } = await requireUser();
-  const departmentId = id.parse(formData.get("departmentId"));
-  const userId = id.parse(formData.get("userId"));
-  await attempt(`/admin/departments/${departmentId}`, () =>
-    setUserMembership(actor, userId, { departmentId, role: role.parse(formData.get("role")) }, acknowledged(formData)).then(() => undefined),
   );
 }

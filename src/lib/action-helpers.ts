@@ -7,11 +7,18 @@ export async function attempt(returnTo: string, fn: () => Promise<void>, onSucce
   try {
     await fn();
   } catch (e) {
-    if (e instanceof AppError) redirect(`${returnTo}?error=${e.code}`);
-    if (e instanceof z.ZodError) redirect(`${returnTo}?error=errInvalidInput`);
+    const sep = returnTo.includes("?") ? "&" : "?";
+    if (e instanceof AppError) redirect(`${returnTo}${sep}error=${e.code}`);
+    if (e instanceof z.ZodError) redirect(`${returnTo}${sep}error=errInvalidInput`);
     throw e;
   }
   redirect(onSuccess);
 }
 
 export const formString = (f: FormData, key: string) => String(f.get(key) ?? "");
+
+/** Accepts only in-app admin paths for post-action redirects; anything else falls back. */
+export function safeReturnPath(value: string | null | undefined, fallback: string): string {
+  if (!value || !value.startsWith("/admin/") || value.includes("//") || value.includes("\\") || value.includes(":")) return fallback;
+  return value;
+}

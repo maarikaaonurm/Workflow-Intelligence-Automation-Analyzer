@@ -47,9 +47,16 @@ vi.mock("@/lib/db", () => {
   const tx = {
     user: {
       // Rows are returned as snapshots, as Prisma does, so later updates do not alter rows already read.
-      findFirst: async ({ where }: { where: Row }) => {
+      findFirst: async ({ where, include }: { where: Row; include?: Row }) => {
         const u = store.users.find((x) => matches(x, where));
-        return u ? { ...u } : null;
+        if (!u) return null;
+        const copy: Row = { ...u };
+        if (include?.memberships) {
+          copy.memberships = store.memberships
+            .filter((m) => m.userId === u.id && m.active)
+            .map((m) => ({ ...m, department: store.departments.find((d) => d.id === m.departmentId) }));
+        }
+        return copy;
       },
       findUnique: async ({ where }: { where: Row }) => {
         const u = store.users.find((x) => matches(x, where));
@@ -117,7 +124,17 @@ vi.mock("@/lib/db", () => {
 
 import { createCampaign } from "./campaigns";
 import { assignManager } from "./departments";
-import { createUser, deactivateUser, listUsers, reactivateUser, setUserMembership, updateUser } from "./users";
+import {
+  createUser,
+  deactivateUser,
+  getMembershipChangePreview,
+  listAssignableUsers,
+  listUsers,
+  reactivateUser,
+  setUserMembership,
+  updateUser,
+} from "./users";
+import { groupCandidates } from "@/lib/membership/candidates";
 
 const admin: Actor = { id: "admin", organizationId: "org", role: "ADMIN", departmentId: null };
 const manager: Actor = { id: "mgr", organizationId: "org", role: "MANAGER", departmentId: "acc" };
@@ -386,3 +403,75 @@ describe("new campaigns", () => {
     expect(store.createdParticipants.map((p) => p.userId)).toEqual(["emp"]);
   });
 });
+
+describe("membership change preview (the confirmation step)", () => {
+  const openParticipation = {
+    id: "p",
+    userId: "emp",
+    status: "ACTIVE",
+    campaignId: "c1",
+    campaign: { id: "c1", name: "Nov analysis", departmentId: "acc", status: "ACTIVE" },
+  };
+
+  it("describes a transfer without changing anything, and lists the campaign it would leave untouched", async () => {
+    store.participants = [openParticipation];
+    const before = JSON.stringify({ m: store.memberships, p: store.participants, u: store.users });
+
+    const preview = await getMembershipChangePreview(admin, "emp", { departmentId: "cm", role: "EMPLOYEE" });
+
+    expect(preview.kind).toBe("transfer");
+    expect(preview.fromDepartment).toMatchObject({ id: "acc", name: "Accounting" });
+    expect(preview.department).toMatchObject({ id: "cm" });
+    expect(preview.impactedCampaigns.map((c: Row) => c.name)).toEqual(["Nov analysis"]);
+    expect(JSON.stringify({ m: store.memberships, p: store.participants, u: store.users })).toBe(before);
+    expect(store.audits).toHaveLength(0);
+  });
+
+  it("transfer needs the acknowledgement, keeps the old membership as history and leaves participation alone", async () => {
+    store.participants = [openParticipation];
+    await expect(setUserMembership(admin, "emp", { departmentId: "cm", role: "EMPLOYEE" })).rejects.toMatchObject({ code: "errCampaignImpact" });
+    await setUserMembership(admin, "emp", { departmentId: "cm", role: "EMPLOYEE" }, true);
+
+    expect(store.memberships.find((m) => m.id === "m2")).toMatchObject({ departmentId: "acc", active: false });
+    expect(activeMemberships("emp")).toHaveLength(1);
+    expect(activeMemberships("emp")[0]).toMatchObject({ departmentId: "cm", role: "EMPLOYEE" });
+    expect(store.participants).toEqual([openParticipation]);
+    expect(actions()).toContain("user.departmentChanged");
+  });
+
+  it("reports an add for a user without a department, a role change inside a department and no change", async () => {
+    store.users.push(person("free", "Vaba"));
+    expect((await getMembershipChangePreview(admin, "free", { departmentId: "cm", role: "EMPLOYEE" })).kind).toBe("add");
+    expect((await getMembershipChangePreview(admin, "emp", { departmentId: "acc", role: "MANAGER" })).kind).toBe("roleChange");
+    expect((await getMembershipChangePreview(admin, "emp", { departmentId: "acc", role: "EMPLOYEE" })).kind).toBe("none");
+  });
+
+  it("names the manager who would become an Employee", async () => {
+    const preview = await getMembershipChangePreview(admin, "emp", { departmentId: "acc", role: "MANAGER" });
+    expect(preview.replacedManager).toMatchObject({ id: "mgr" });
+  });
+
+  it("does not preview anything for inactive users, administrators or non-admin actors", async () => {
+    await deactivateUser(admin, "emp2");
+    await expect(getMembershipChangePreview(admin, "emp2", { departmentId: "cm", role: "EMPLOYEE" })).rejects.toMatchObject({ code: "errUserInactive" });
+    await expect(getMembershipChangePreview(admin, "admin", { departmentId: "cm", role: "EMPLOYEE" })).rejects.toMatchObject({ code: "errUserIsAdmin" });
+    await expect(getMembershipChangePreview(manager, "emp", { departmentId: "cm", role: "EMPLOYEE" })).rejects.toMatchObject({ code: "errForbidden" });
+  });
+});
+
+describe("transfer candidates", () => {
+  it("do not include inactive users or administrators", async () => {
+    await deactivateUser(admin, "emp2");
+    const assignable = await listAssignableUsers(admin);
+    const ids = assignable.map((u: Row) => u.id);
+    expect(ids).not.toContain("emp2");
+    expect(ids).not.toContain("admin");
+
+    const groups = groupCandidates(
+      assignable.map((u: Row) => ({ id: u.id, name: u.name, active: u.active, isOrgAdmin: u.isOrgAdmin, membership: null })),
+      { targetDepartmentId: "cm", includeTargetDepartment: false },
+    );
+    expect(groups.flatMap((g) => g.users.map((x) => x.id))).not.toContain("emp2");
+  });
+});
+

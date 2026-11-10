@@ -7,7 +7,7 @@ import { getUserDetail } from "@/lib/services/users";
 import { listDepartments } from "@/lib/services/departments";
 import { toISODate } from "@/lib/campaigns/dates";
 import { ErrorBanner } from "@/components/ErrorBanner";
-import { reactivateUserAction, setMembershipAction, updateUserAction } from "../../../user-actions";
+import { reactivateUserAction, updateUserAction } from "../../../user-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -83,18 +83,16 @@ export default async function UserDetailPage({
               <p className="mt-1">{t("campaignImpactNote")}</p>
             </div>
           )}
-          <form action={setMembershipAction} className="space-y-2">
+          {/* Changing department or role is reviewed on a confirmation page first; nothing changes on submit here. */}
+          <form method="get" action="/admin/membership/confirm" className="space-y-2">
             <input type="hidden" name="userId" value={user.id} />
+            <input type="hidden" name="returnTo" value={`/admin/users/${user.id}`} />
             <div className="grid grid-cols-2 gap-3">
               <label className="flex flex-col text-sm">{t("department")}{deptSelect(current?.departmentId)}</label>
               <label className="flex flex-col text-sm">{t("role")}{roleSelect(current?.role)}</label>
             </div>
             <p className="text-xs text-gray-500">{t("roleManagerReplaceNote")}</p>
-            <label className="flex items-start gap-2 text-sm">
-              <input type="checkbox" name="ackCampaigns" className="mt-1" />
-              {t("ackCampaigns")}
-            </label>
-            <button className={primary}>{t("save")}</button>
+            <button className={primary}>{t("reviewChange")}</button>
           </form>
           <Link href={`/admin/users/${user.id}/confirm`} className={secondary}>{t("deactivateUser")}</Link>
         </section>

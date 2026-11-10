@@ -279,6 +279,69 @@ export async function getUserDetail(actor: Actor, userId: string) {
   return { user, current, history: user.memberships, impactedCampaigns: impact.map((p) => p.campaign) };
 }
 
+export type MembershipChangeKind = "add" | "transfer" | "roleChange" | "none";
+
+/**
+ * Read-only preview of a membership change, for the confirmation page. Nothing is
+ * modified: it reports what would happen, including campaign participation that the
+ * change would leave untouched.
+ */
+export async function getMembershipChangePreview(actor: Actor, userId: string, membership: MembershipInput) {
+  requireUserAdmin(actor);
+  const target = membershipInputSchema.parse(membership);
+  const user = await db.user.findFirst({
+    where: { id: userId, organizationId: actor.organizationId },
+    include: { memberships: { where: { active: true }, include: { department: true } } },
+  });
+  if (!user) throw new AppError("errNotFound");
+  if (user.isOrgAdmin) throw new AppError("errUserIsAdmin");
+  if (!user.active) throw new AppError("errUserInactive");
+  const department = await db.department.findFirst({ where: { id: target.departmentId, organizationId: actor.organizationId } });
+  if (!department) throw new AppError("errNotFound");
+
+  const current = user.memberships[0] ?? null;
+  const kind: MembershipChangeKind = !current
+    ? "add"
+    : current.departmentId !== target.departmentId
+      ? "transfer"
+      : current.role === target.role
+        ? "none"
+        : "roleChange";
+
+  const impactedCampaigns =
+    current && kind === "transfer"
+      ? (
+          await db.campaignParticipant.findMany({
+            where: {
+              userId,
+              status: "ACTIVE",
+              campaign: { departmentId: current.departmentId, status: { in: [...OPEN_CAMPAIGN_STATUSES] } },
+            },
+            include: { campaign: true },
+          })
+        ).map((p) => p.campaign)
+      : [];
+
+  const replacedManager =
+    target.role === "MANAGER"
+      ? await db.departmentMembership.findFirst({
+          where: { departmentId: target.departmentId, active: true, role: "MANAGER", userId: { not: userId } },
+          include: { user: true },
+        })
+      : null;
+
+  return {
+    kind,
+    user,
+    department,
+    role: target.role,
+    fromDepartment: current?.department ?? null,
+    fromRole: current?.role ?? null,
+    impactedCampaigns,
+    replacedManager: replacedManager?.user ?? null,
+  };
+}
+
 /** Active non-admin users, for choosing members and managers across departments. */
 export async function listAssignableUsers(actor: Actor) {
   requireUserAdmin(actor);
