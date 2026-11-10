@@ -1,13 +1,17 @@
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { can, type Actor } from "@/lib/auth/policy";
-import { ForbiddenError } from "@/lib/errors";
+import { AppError, ForbiddenError } from "@/lib/errors";
+import { setUserMembership } from "@/lib/services/users";
 
 export { ForbiddenError };
 
 export async function createDepartment(actor: Actor, name: string) {
   if (!can(actor, "department:create", { organizationId: actor.organizationId })) {
     throw new ForbiddenError();
+  }
+  if (await db.department.findFirst({ where: { organizationId: actor.organizationId, name } })) {
+    throw new AppError("errAlreadyExists");
   }
   return db.$transaction(async (tx) => {
     const department = await tx.department.create({
@@ -26,44 +30,14 @@ export async function createDepartment(actor: Actor, name: string) {
 }
 
 /**
- * Assigns or replaces the single active Department Manager. The previous manager
- * stays in the department as an Employee. The user must already belong to this
- * department (non-admin users have exactly one department).
+ * Assigns or replaces the single active Department Manager. The user may come from
+ * any department (or be a member already): they are moved here if needed, and the
+ * previous manager stays in the department as an Employee. Membership history is
+ * kept as ended and new rows, never rewritten.
  */
-export async function assignManager(actor: Actor, departmentId: string, userId: string) {
-  return db.$transaction(async (tx) => {
-    const department = await tx.department.findUniqueOrThrow({ where: { id: departmentId } });
-    if (!can(actor, "department:assignManager", department)) throw new ForbiddenError();
-
-    const target = await tx.departmentMembership.findFirst({
-      where: { userId, departmentId, active: true, user: { isOrgAdmin: false } },
-    });
-    if (!target) throw new Error("User is not an active member of this department");
-
-    const current = await tx.departmentMembership.findFirst({
-      where: { departmentId, active: true, role: "MANAGER" },
-    });
-    if (current?.userId === userId) return target;
-
-    // Demote first so the one-active-manager unique index is never violated.
-    if (current) {
-      await tx.departmentMembership.update({ where: { id: current.id }, data: { role: "EMPLOYEE" } });
-    }
-    const updated = await tx.departmentMembership.update({
-      where: { id: target.id },
-      data: { role: "MANAGER" },
-    });
-    await writeAudit(tx, {
-      organizationId: department.organizationId,
-      departmentId,
-      actorId: actor.id,
-      action: "department.managerAssigned",
-      targetType: "DepartmentMembership",
-      targetId: updated.id,
-      metadata: { newManagerUserId: userId, previousManagerUserId: current?.userId ?? null },
-    });
-    return updated;
-  });
+export async function assignManager(actor: Actor, departmentId: string, userId: string, acknowledgedCampaignImpact = false) {
+  if (!can(actor, "department:assignManager", { organizationId: actor.organizationId })) throw new ForbiddenError();
+  return setUserMembership(actor, userId, { departmentId, role: "MANAGER" }, acknowledgedCampaignImpact);
 }
 
 export async function listDepartments(actor: Actor) {
@@ -77,4 +51,18 @@ export async function listDepartments(actor: Actor) {
     },
     orderBy: { name: "asc" },
   });
+}
+
+/** One department with its active members (managers first) for the admin member-management page. */
+export async function getDepartmentDetail(actor: Actor, departmentId: string) {
+  if (!can(actor, "department:create", { organizationId: actor.organizationId })) throw new ForbiddenError();
+  const department = await db.department.findFirst({
+    where: { id: departmentId, organizationId: actor.organizationId },
+    include: { memberships: { where: { active: true }, include: { user: true } } },
+  });
+  if (!department) throw new AppError("errNotFound");
+  const members = [...department.memberships].sort(
+    (a, b) => Number(b.role === "MANAGER") - Number(a.role === "MANAGER") || a.user.name.localeCompare(b.user.name),
+  );
+  return { department, members, manager: members.find((m) => m.role === "MANAGER") ?? null };
 }

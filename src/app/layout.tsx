@@ -43,6 +43,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {user.actor.role === "EMPLOYEE" && <Link href="/mapping">{t("myMapping")}</Link>}
             <Link href="/categories">{t("categoryGuide")}</Link>
             <Link href="/admin/departments">{t("departments")}</Link>
+            {user.actor.role === "ADMIN" && <Link href="/admin/users">{t("users")}</Link>}
             {user.actor.role === "ADMIN" && <Link href="/admin/reference">{t("referenceData")}</Link>}
           </nav>
         )}

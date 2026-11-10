@@ -33,7 +33,7 @@ async function main() {
   await db.user.upsert({
     where: { email: "admin@demo.example" },
     update: {},
-    create: { organizationId: org.id, email: "admin@demo.example", name: "Anna Admin", isOrgAdmin: true },
+    create: { organizationId: org.id, email: "admin@demo.example", firstName: "Anna", lastName: "Admin", name: "Anna Admin", isOrgAdmin: true },
   });
 
   for (const dept of [accounting, ...otherDepartments]) {
@@ -50,7 +50,7 @@ async function main() {
       const user = await db.user.upsert({
         where: { email: email(name) },
         update: {},
-        create: { organizationId: org.id, email: email(name), name },
+        create: { organizationId: org.id, email: email(name), firstName: name.split(" ")[0], lastName: name.split(" ").slice(1).join(" "), name },
       });
       const existing = await db.departmentMembership.findFirst({ where: { userId: user.id, active: true } });
       if (!existing) {

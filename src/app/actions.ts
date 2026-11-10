@@ -7,7 +7,8 @@ import { db } from "@/lib/db";
 import { devLoginEnabled, endSession, requireUser, startSession } from "@/lib/auth/session";
 import { LOCALE_COOKIE } from "@/lib/i18n/server";
 import { normalizeLocale } from "@/lib/i18n/messages";
-import { assignManager, createDepartment } from "@/lib/services/departments";
+import { attempt } from "@/lib/action-helpers";
+import { createDepartment } from "@/lib/services/departments";
 
 export async function devLogin(formData: FormData) {
   if (!devLoginEnabled()) throw new Error("Development login is disabled");
@@ -31,15 +32,8 @@ export async function setLocale(formData: FormData) {
 
 export async function createDepartmentAction(formData: FormData) {
   const { actor } = await requireUser();
-  const name = z.string().trim().min(1).max(100).parse(formData.get("name"));
-  await createDepartment(actor, name);
-  redirect("/admin/departments");
-}
-
-export async function assignManagerAction(formData: FormData) {
-  const { actor } = await requireUser();
-  const departmentId = z.string().min(1).parse(formData.get("departmentId"));
-  const userId = z.string().min(1).parse(formData.get("userId"));
-  await assignManager(actor, departmentId, userId);
-  redirect("/admin/departments");
+  await attempt("/admin/departments", async () => {
+    const name = z.string().trim().min(1).max(100).parse(formData.get("name"));
+    await createDepartment(actor, name);
+  });
 }
