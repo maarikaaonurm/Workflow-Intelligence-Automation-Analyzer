@@ -7,6 +7,8 @@ const store = vi.hoisted(() => ({
   participants: [] as Row[],
   activityCounts: [] as { participantId: string; _count: { _all: number } }[],
   campaignCreateCalls: 0,
+  diaryDays: [] as { participantId: string; activityDate: Date }[],
+  confirmations: [] as { participantId: string }[],
 }));
 
 const DONE = new Date("2026-11-12T09:00:00Z");
@@ -33,6 +35,8 @@ vi.mock("@/lib/db", () => {
     auditLog: { findMany: async () => [] },
     reminderPreference: { findUnique: async () => null },
     initialActivity: { groupBy: async () => store.activityCounts },
+    diaryEntry: { groupBy: async () => store.diaryDays },
+    diaryConfirmation: { findMany: async () => store.confirmations },
     departmentMembership: { findMany: async () => [], findFirst: async () => ({ id: "m" }) },
     department: { findFirst: async () => ({ id: "dept", organizationId: "org" }), create: async () => ({ id: "dept" }) },
     user: { upsert: async ({ where }: { where: Row }) => ({ id: where.email, email: where.email }) },
@@ -55,10 +59,15 @@ const adminManager = actor("am", true, "MANAGER", "acc");
 
 const participant = (id: string, userId: string, name: string, extra: Row = {}): Row => ({
   id, userId, campaignId: "c1", status: "ACTIVE", mappingCompletedAt: null,
-  user: { id: userId, name }, excludedDates: [], periods: [], ...extra,
+  user: { id: userId, name }, excludedDates: [],
+  periods: [{ startDate: new Date("2026-11-09T00:00:00Z"), inactiveFrom: null }], ...extra,
 });
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-20T10:00:00Z"));
+  store.diaryDays = [];
+  store.confirmations = [];
   store.campaignCreateCalls = 0;
   store.participants = [
     participant("p-mgr", "mgr", "Marta Manager"),
@@ -90,7 +99,8 @@ describe("manager readiness view", () => {
   it("carries no score, rank or comparison, and exposes no activity content", async () => {
     const detail = await getCampaignDetail(manager, "c1");
     for (const row of detail.mappingReadiness) {
-      expect(Object.keys(row).sort()).toEqual(["completedAt", "name", "participantId", "status"]);
+      expect(Object.keys(row).sort()).toEqual(["completedAt", "diaryConfirmed", "diaryCoverage", "name", "participantId", "status"]);
+      expect(Object.keys(row.diaryCoverage).sort()).toEqual(["daysWithEntries", "eligibleDays", "excludedDays"]);
     }
   });
 
@@ -132,3 +142,36 @@ describe("synthetic demo data", () => {
     expect(store.campaignCreateCalls).toBe(0);
   });
 });
+
+describe("manager diary context (coverage and confirmations)", () => {
+  it("shows informational coverage per participant, counting only eligible days", async () => {
+    store.diaryDays = [
+      { participantId: "p1", activityDate: new Date("2026-11-10T00:00:00Z") },
+      { participantId: "p1", activityDate: new Date("2026-11-11T00:00:00Z") },
+      { participantId: "p2", activityDate: new Date("2026-11-10T00:00:00Z") },
+    ];
+    store.participants[1].excludedDates = [{ date: new Date("2026-11-12T00:00:00Z") }];
+    const detail = await getCampaignDetail(manager, "c1");
+    const byName = Object.fromEntries(detail.mappingReadiness.map((r) => [r.name, r.diaryCoverage]));
+    // 2026-11-09 .. 2026-11-20 holds 10 weekdays
+    expect(byName["Jüri Draft"]).toEqual({ eligibleDays: 10, excludedDays: 0, daysWithEntries: 1 });
+    expect(byName["Eha Done"]).toEqual({ eligibleDays: 9, excludedDays: 1, daysWithEntries: 2 });
+    expect(byName["Tiiu None"].daysWithEntries).toBe(0);
+  });
+
+  it("counts diary confirmations for the manager and never exposes entries", async () => {
+    store.confirmations = [{ participantId: "p1" }];
+    const detail = await getCampaignDetail(manager, "c1");
+    expect(detail.diaryConfirmationCount).toBe(1);
+    expect(detail.mappingReadiness.find((r) => r.name === "Eha Done")?.diaryConfirmed).toBe(true);
+    expect(detail.mappingReadiness.find((r) => r.name === "Tiiu None")?.diaryConfirmed).toBe(false);
+    expect(JSON.stringify(detail.mappingReadiness)).not.toContain("title");
+  });
+
+  it("shows an Employee neither coverage nor confirmations of others", async () => {
+    const detail = await getCampaignDetail(employee, "c1");
+    expect(detail.mappingReadiness).toEqual([]);
+    expect(detail.diaryConfirmationCount).toBe(0);
+  });
+});
+

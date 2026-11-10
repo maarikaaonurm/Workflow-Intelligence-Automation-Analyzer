@@ -82,3 +82,16 @@
 - **Demo data without an environment variable.** An admin button loads an idempotent synthetic department, campaign and mappings; it never adds a campaign to a department that already has one. `SEED_ON_START` is not needed.
 - **Estonian labels** for frequency now read Igapäevane, Iganädalane, Igakuine, Kvartaalne, Aastane, Juhuslik.
 - **Found while testing:** the Excel template formats dropdown cells in rows below the data, which made the old "row count" check count empty rows; the importer now bounds the sheet and counts only rows with content.
+
+## 2026-11-16 Phase 4 Activity Diary decisions
+- **Window rules.** Create: only while observation runs (ACTIVE), never in Initial Mapping or the Review Window; the date must be today or up to `retrospectiveWindowDays` calendar days back (so 3 allows today plus the 3 previous days), within the campaign, on a day the participant was actively participating (participation periods) and not marked absent. A stopped or excluded participant cannot add new entries. Review Window: edit existing entries and confirm; the date is fixed and deleting is not allowed. After locking, nothing changes.
+- **Confirm My Diary** is a row per participant; any later correction withdraws it. Missing confirmations never block locking; the lock confirmation page shows how many are missing.
+- **Timer** is stored on the server (a refresh or a closed tab does not lose it), one per participant, and is never stopped automatically. Stopping only ends the clock and opens the normal entry form with the duration to review and adjust; discarding saves nothing. Warnings (never a label): more than 3 times the mapped activity's duration (minimum 60 minutes) or more than 8 hours. The 8-hour maximum is a constant for now; the Organization Admin setting comes with the settings work.
+- **Parallel work.** Overlapping explicit times are accepted. Recorded time is the sum of entered durations; "unique time" merges overlapping ranges (untimed entries are added as entered) and is shown only when an overlap exists. Out-of-scope time is shown separately.
+- **Free-text activity vs mapped activity.** The participant chooses; a new activity is saved as described and is never merged. The AI hint ("this may belong to Bank Receipt Review") and the AI marker suggestion are Phase 6 (provider-independent AI layer) and are not implemented yet.
+- **Shared meetings.** A participant defines a meeting once and adds it to their own diary; each other participant adds it to their own diary (one entry each, enforced by a unique index). Nobody writes into another person's diary.
+- **Micro-activities** are consolidated entries using volume and unit ("8 cases, 35 minutes"); no per-action rows are required.
+- **Reminders** are an in-app banner when the reminder time has passed and nothing is logged today; no Teams or email (interface for later).
+- **Coverage for the manager** is "recorded on X of Y eligible days" per participant, ignoring absent days and inactive gaps; it is not a score or a percentage.
+- **Audit.** Only diary confirmation is audited; individual entries are not (volume, and their content is private).
+- **Favorites** are mapped activities only.

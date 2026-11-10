@@ -119,6 +119,40 @@ enum ImportBatchStatus {
   COMPLETED
 }
 
+enum DiaryCondition {
+  NORMAL
+  WAITING
+  REWORK
+  PROBLEM
+}
+
+enum DiarySource {
+  MANUAL
+  TIMER
+  FAVORITE
+  LOG_AGAIN
+  QUICK_ADD
+  MEETING
+}
+
+enum DiaryEntryKind {
+  ACTIVITY
+  MEETING
+}
+
+enum MeetingRecurrence {
+  RECURRING
+  AD_HOC
+}
+
+enum MeetingPurpose {
+  INFORMATION_SHARING
+  DECISION_MAKING
+  PROBLEM_SOLVING
+  PLANNING
+  OTHER
+}
+
 model Organization {
   id                 String             @id @default(cuid())
   name               String
@@ -248,6 +282,10 @@ model CampaignParticipant {
   mappingBaselineActivityCount Int?
   importBatches                InitialMappingImportBatch[]
   activities                   InitialActivity[]
+  diaryEntries                 DiaryEntry[]
+  favorites                    FavoriteActivity[]
+  timer                        DiaryTimer?
+  diaryConfirmation            DiaryConfirmation?
 
   @@unique([campaignId, userId])
 }
@@ -344,6 +382,7 @@ model VolumeUnit {
   active         Boolean                  @default(true)
   organization   Organization             @relation(fields: [organizationId], references: [id])
   versions       InitialActivityVersion[]
+  diaryEntries   DiaryEntry[]
 
   @@unique([organizationId, key])
 }
@@ -355,6 +394,7 @@ model SystemReference {
   active         Boolean                  @default(true)
   organization   Organization             @relation(fields: [organizationId], references: [id])
   versions       InitialActivityVersion[]
+  diaryEntries   DiaryEntry[]
 
   @@unique([organizationId, name])
 }
@@ -370,6 +410,8 @@ model InitialActivity {
   importBatch   InitialMappingImportBatch? @relation(fields: [importBatchId], references: [id])
   participant   CampaignParticipant        @relation(fields: [participantId], references: [id], onDelete: Cascade)
   versions      InitialActivityVersion[]
+  diaryEntries  DiaryEntry[]
+  favorites     FavoriteActivity[]
 
   @@index([campaignId, participantId])
 }
@@ -440,4 +482,94 @@ model InitialMappingImportBatch {
 
   @@unique([participantId, idempotencyKey])
   @@index([participantId, contentHash])
+}
+
+// One actual piece of work (or a meeting) a participant logged for one date. Only the owner reads or
+// writes it. `title` is a snapshot of the activity name, so an entry stays readable even if the mapped
+// activity is later removed. A free-text entry has no initialActivityId.
+model DiaryEntry {
+  id                     String              @id @default(cuid())
+  campaignId             String
+  participantId          String
+  kind                   DiaryEntryKind      @default(ACTIVITY)
+  activityDate           DateTime            @db.Date
+  initialActivityId      String?
+  title                  String
+  durationMinutes        Int
+  // Optional clock times as minutes since midnight. Explicit times may overlap other entries (parallel work).
+  startMinute            Int?
+  endMinute              Int?
+  volume                 Float?
+  volumeUnitId           String?
+  condition              DiaryCondition      @default(NORMAL)
+  interrupted            Boolean             @default(false)
+  outOfScope             Boolean             @default(false)
+  note                   String?
+  improvementOpportunity Boolean             @default(false)
+  employeeSuggestion     String?
+  source                 DiarySource         @default(MANUAL)
+  meetingRecurrence      MeetingRecurrence?
+  meetingPurpose         MeetingPurpose?
+  sharedMeetingId        String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  participant            CampaignParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  initialActivity        InitialActivity?    @relation(fields: [initialActivityId], references: [id], onDelete: SetNull)
+  volumeUnit             VolumeUnit?         @relation(fields: [volumeUnitId], references: [id])
+  sharedMeeting          SharedMeeting?      @relation(fields: [sharedMeetingId], references: [id], onDelete: SetNull)
+  systems                SystemReference[]
+
+  // A participant can add a given shared meeting to their own diary only once.
+  @@unique([participantId, sharedMeetingId])
+  @@index([participantId, activityDate])
+}
+
+// A meeting defined once so several participants can each add it to their own diary without double counting.
+model SharedMeeting {
+  id              String            @id @default(cuid())
+  campaignId      String
+  createdById     String
+  title           String
+  meetingDate     DateTime          @db.Date
+  durationMinutes Int
+  recurrence      MeetingRecurrence
+  purpose         MeetingPurpose
+  note            String?
+  createdAt       DateTime          @default(now())
+  entries         DiaryEntry[]
+
+  @@index([campaignId, meetingDate])
+}
+
+model FavoriteActivity {
+  id                String              @id @default(cuid())
+  participantId     String
+  initialActivityId String
+  createdAt         DateTime            @default(now())
+  participant       CampaignParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  initialActivity   InitialActivity     @relation(fields: [initialActivityId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, initialActivityId])
+}
+
+// At most one running timer per participant. It is stored on the server, so a refresh does not lose it,
+// and it is never stopped automatically.
+model DiaryTimer {
+  id                String              @id @default(cuid())
+  participantId     String              @unique
+  campaignId        String
+  initialActivityId String?
+  title             String
+  startedAt         DateTime            @default(now())
+  // Set when the participant stops the timer and is reviewing the duration.
+  stoppedAt         DateTime?
+  participant       CampaignParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+}
+
+model DiaryConfirmation {
+  id            String              @id @default(cuid())
+  campaignId    String
+  participantId String              @unique
+  confirmedAt   DateTime            @default(now())
+  participant   CampaignParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
 }

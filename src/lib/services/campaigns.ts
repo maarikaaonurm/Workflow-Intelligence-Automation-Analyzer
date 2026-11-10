@@ -5,6 +5,7 @@ import { writeAudit } from "@/lib/audit";
 import { can, managesDepartment, type Actor } from "@/lib/auth/policy";
 import { AppError, ForbiddenError } from "@/lib/errors";
 import {
+  coverage,
   fromISODate,
   ISO_DATE,
   toISODate,
@@ -552,7 +553,7 @@ export async function getCampaignDetail(actor: Actor, campaignId: string) {
   const campaign = await syncCampaignStatus(found);
 
   const canManage = can(actor, "campaign:manage", campaign);
-  const [participants, acknowledgementCount, endDateChanges, own, activityCounts] = await Promise.all([
+  const [participants, acknowledgementCount, endDateChanges, own, activityCounts, diaryDays, diaryConfirmations] = await Promise.all([
     db.campaignParticipant.findMany({
       where: { campaignId },
       include: { user: true, excludedDates: { orderBy: { date: "asc" } }, periods: { orderBy: { startDate: "asc" } } },
@@ -573,6 +574,9 @@ export async function getCampaignDetail(actor: Actor, campaignId: string) {
       : null,
     // Only counts per participant: enough to tell Not started / Draft / Completed, never the content.
     canManage ? db.initialActivity.groupBy({ by: ["participantId"], where: { campaignId }, _count: { _all: true } }) : [],
+    // Distinct dates with at least one entry, per participant: coverage context only, never the entries.
+    canManage ? db.diaryEntry.groupBy({ by: ["participantId", "activityDate"], where: { campaignId } }) : [],
+    canManage ? db.diaryConfirmation.findMany({ where: { campaignId }, select: { participantId: true } }) : [],
   ]);
 
   const dept = await db.departmentMembership.findMany({
@@ -601,8 +605,21 @@ export async function getCampaignDetail(actor: Actor, campaignId: string) {
               completedAt: p.mappingCompletedAt,
             }),
             completedAt: p.mappingCompletedAt,
+            // Informational diary coverage ("recorded on X of Y eligible days"); never a score or a percentage.
+            diaryCoverage: coverage(
+              {
+                campaignStart: toISODate(campaign.startDate),
+                campaignEnd: toISODate(campaign.endDate),
+                periods: p.periods.map((x) => ({ start: toISODate(x.startDate), inactiveFrom: x.inactiveFrom ? toISODate(x.inactiveFrom) : null })),
+                through: todayISO(),
+              },
+              p.excludedDates.map((x) => toISODate(x.date)),
+              diaryDays.filter((d) => d.participantId === p.id).map((d) => toISODate(d.activityDate)),
+            ),
+            diaryConfirmed: diaryConfirmations.some((c) => c.participantId === p.id),
           }))
       : [],
+    diaryConfirmationCount: diaryConfirmations.length,
     mappingCompletedCount: participants.filter((p) => p.status === "ACTIVE" && p.mappingCompletedAt !== null).length,
     acknowledgementCount,
     addableMembers: canManage ? dept.filter((m) => !participantIds.has(m.userId)).map((m) => m.user) : [],

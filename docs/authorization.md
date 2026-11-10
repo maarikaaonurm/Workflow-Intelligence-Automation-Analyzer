@@ -55,4 +55,7 @@ A manager who participates edits and confirms their own participant data like an
 
 ## Not implemented yet
 
-`diary:write` and `diary:confirm` are defined and tested in the policy, but the Activity Diary itself is Phase 4. Granting or revoking the Organization Admin privilege has no UI: the privilege is set in the seed data.
+The Activity Diary (Phase 4) uses `diary:write`, `diary:read` and `diary:confirm`. Granting or revoking the Organization Admin privilege has no UI: the privilege is set in the seed data.
+
+## Diary (Phase 4)
+`diary:write`, `diary:read` and `diary:confirm` are used by the diary service for the actor's own participant record in their own department, in any department role. A participating Department Manager or Organization Admin + Manager uses exactly the same functions as an Employee, and sees only their own diary; manager functions never open another participant's diary.

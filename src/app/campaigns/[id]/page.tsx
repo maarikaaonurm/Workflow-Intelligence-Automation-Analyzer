@@ -209,6 +209,10 @@ export default async function CampaignPage({
         </section>
       )}
 
+      {d.canManage && (status === "REVIEW_WINDOW" || status === "LOCKED") && (
+        <p className="text-sm">{t("diaryConfirmations")}: {d.diaryConfirmationCount} / {d.participantCount}</p>
+      )}
+
       {d.canManage && d.mappingReadiness.length > 0 && (
         <section className="space-y-2">
           <h2 className="font-medium">{t("mappingReadinessTitle")}</h2>
@@ -218,7 +222,9 @@ export default async function CampaignPage({
               <tr className="border-b border-gray-200">
                 <th scope="col" className="py-1 pr-3">{t("participants")}</th>
                 <th scope="col" className="py-1 pr-3">{t("colStatus")}</th>
-                <th scope="col" className="py-1">{t("completedOn")}</th>
+                <th scope="col" className="py-1 pr-3">{t("completedOn")}</th>
+                <th scope="col" className="py-1 pr-3">{t("diaryCoverageHeading")}</th>
+                <th scope="col" className="py-1">{t("diaryConfirmedHeading")}</th>
               </tr>
             </thead>
             <tbody>
@@ -226,7 +232,9 @@ export default async function CampaignPage({
                 <tr key={r.participantId} className="border-b border-gray-100">
                   <th scope="row" className="py-1 pr-3 font-normal">{r.name}</th>
                   <td className="py-1 pr-3">{t(`mapStatus${r.status}`)}</td>
-                  <td className="py-1">{r.completedAt ? toISODate(r.completedAt) : ""}</td>
+                  <td className="py-1 pr-3">{r.completedAt ? toISODate(r.completedAt) : ""}</td>
+                  <td className="py-1 pr-3">{t("coverageLine").replace("{done}", String(r.diaryCoverage.daysWithEntries)).replace("{eligible}", String(r.diaryCoverage.eligibleDays))}</td>
+                  <td className="py-1">{r.diaryConfirmed ? t("yes") : t("no")}</td>
                 </tr>
               ))}
             </tbody>

@@ -30,3 +30,6 @@ No schema change was needed: `User.isOrgAdmin` (privilege), `DepartmentMembershi
 - `InitialMappingImportBatch`: idempotency key (unique per participant), content hash, template version and language, sanitized file name, row/success/warning/error counts. Raw files are never stored.
 - `CampaignParticipant.mappingBaselineHash` and `mappingBaselineActivityCount`: the identity of the completed baseline (the input-data version for later analysis).
 - Canonical business values (`DAILY`, `END_OF_MONTH`, ...) are stored; localized labels are display only.
+
+## Phase 4 tables
+`DiaryEntry` (kind ACTIVITY or MEETING, date, optional link to a mapped activity plus a title snapshot, duration 1-1440 minutes, optional start/end minutes since midnight, volume and unit, condition, interrupted, outOfScope, note, improvement flag and suggestion, source MANUAL / TIMER / FAVORITE / LOG_AGAIN / QUICK_ADD / MEETING, optional meeting purpose and recurrence, optional shared meeting; CHECK constraints for duration, time pairing, volume/unit pairing and meeting fields), `SharedMeeting` (one per shared meeting; unique `(participant, sharedMeeting)` so it is never counted twice), `FavoriteActivity`, `DiaryTimer` (at most one per participant, stored on the server), `DiaryConfirmation` (one per participant).

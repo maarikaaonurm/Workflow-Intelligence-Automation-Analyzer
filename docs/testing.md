@@ -25,3 +25,11 @@
 - `lib/i18n/phase3-localization.test.ts`: every Phase 3 text exists in Estonian and is not an English copy; standard category cards are complete in both languages.
 - `lib/services/readiness.test.ts`: manager readiness (neutral), manager who participates, demo-data guard.
 Not covered by automated tests: real SQL constraints, the browser behaviour of the stepped form and the upload form, and the first run of the demo-data loader against a real database.
+
+## Phase 4 tests
+- `lib/diary/diary.test.ts`: entry schema, form parsing, permissions per campaign state, date window and participation gaps, timer rules, parallel-work totals, reminders, Log Again.
+- `lib/services/diary.test.ts` (in-memory Prisma stand-in, rollback on failure): manual / free-text / meeting entries, flags and markers, overlapping times accepted, retrospective window, end of observation, before start, own-diary-only authorization (manager, Admin + Manager, Admin with no department, other participants), Review Window corrections, locked campaign, Confirm My Diary (and its withdrawal), timer (one at a time, never auto-stops, stop then review then save, discard), favorites, Quick Add (valid rows saved, invalid rows reported), shared meetings (once per participant, never writes into another diary), reading my diary.
+- `app/diary-actions.test.ts`: confirmation gates (delete, discard timer, confirm diary), stop timer saves nothing, form errors keep entries, quick add and meetings.
+- `lib/services/readiness.test.ts`: manager coverage and confirmation count, no entries exposed.
+- `lib/i18n/phase4-localization.test.ts`.
+Not covered by automated tests: real SQL constraints, the browser behaviour of the forms (timer page, Quick Add rows), and the real clock.

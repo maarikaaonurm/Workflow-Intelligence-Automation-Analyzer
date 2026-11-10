@@ -13,3 +13,9 @@
 - The preview lives only in the participant's browser; nothing is saved until they confirm. Cancelling or leaving saves nothing.
 - Stored about an import: counts, template version and language, a sanitized file name and a content hash. The audit log holds the same counts, never spreadsheet content or activity text.
 - Activity descriptions can mention sensitive topics; participants classify sensitivity per activity, and the template instructions ask for no personal data of customers or colleagues.
+
+## Activity Diary (Phase 4)
+- A diary entry is readable and writable only by its owner. Someone else's entry looks like a missing page, so its existence is not revealed.
+- The Department Manager sees: how many participants confirmed their diary, and per participant "recorded on X of Y eligible days". Never entries, notes, durations or titles. Coverage ignores absent days and inactive participation gaps and is not a score.
+- Notes are optional and never required. Diary entries are not copied into the audit log; only confirmations are audited.
+- Entries are the data the retention policy snapshot (12 months by default) applies to; the retention job itself is Phase 9.

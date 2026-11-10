@@ -60,6 +60,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {caps.myWork && (
               <NavGroup label={t("navMyWork")}>
                 <Link href="/mapping">{t("myMapping")}</Link>
+                <Link href="/diary">{t("myDiary")}</Link>
                 {ownCampaign && <Link href={`/campaigns/${ownCampaign.id}`}>{t("myCampaignStatus")}</Link>}
               </NavGroup>
             )}

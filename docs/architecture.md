@@ -27,3 +27,6 @@ Railway, deployed from `main`. PostgreSQL via `DATABASE_URL` on Railway only. Mi
 - `lib/mapping/schema.ts` one Zod schema for the form, the import and the server; `form.ts` (form parsing, minutes/hours); `import.ts` (columns, localized value normalization, row validation, duplicate and plausibility warnings); `files.ts` (template building and reading, content checks, version check, formula neutralizing); `warnings.ts`, `baseline.ts` (content and baseline hashes), `present.ts` (localized category card, status, version diff).
 - `services/mapping.ts` (ownership, versions, completion, import preview and confirmation, audit); `lib/demo/mapping-demo.ts` (idempotent synthetic data).
 - `app/mapping/template/route.ts` serves the template in the interface language.
+
+## Diary modules (Phase 4)
+`lib/diary/schema.ts` (one Zod schema), `form.ts` (form parsing, minutes/hours, times), `rules.ts` (permissions per campaign state, date window, timer warning, parallel-work totals), `present.ts` (form values, Log Again), `services/diary.ts` (entries, timer, favorites, meetings, Quick Add, confirmation, reading). Pages under `app/diary/*`; forms `DiaryForm` and `QuickAddForm`. Authorization uses the policy actions `diary:write`, `diary:read`, `diary:confirm` for the actor's own records only.

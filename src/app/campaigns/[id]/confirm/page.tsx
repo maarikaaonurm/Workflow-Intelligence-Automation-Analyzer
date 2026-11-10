@@ -71,6 +71,13 @@ export default async function ConfirmPage({
         {participant ? ` · ${participant.user.name}` : ""}
       </p>
       <p className="rounded bg-surface p-4">{message.replace("{date}", date)}</p>
+      {kind === "lock" && d.participantCount > d.diaryConfirmationCount && (
+        <p role="alert" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+          {t("lockMissingConfirmations")
+            .replace("{missing}", String(d.participantCount - d.diaryConfirmationCount))
+            .replace("{total}", String(d.participantCount))}
+        </p>
+      )}
       <form action={formAction} className="flex items-center gap-3">
         <input type="hidden" name="campaignId" value={id} />
         <input type="hidden" name="confirmed" value="yes" />
