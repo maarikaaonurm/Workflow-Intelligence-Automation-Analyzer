@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
 import { getCurrentUser } from "@/lib/auth/session";
+import { capabilitiesOf } from "@/lib/auth/policy";
+import { findOwnCampaign } from "@/lib/services/mapping";
 import { getT } from "@/lib/i18n/server";
 import { logout, setLocale } from "./actions";
 
@@ -11,6 +13,9 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const [user, { locale, t }] = await Promise.all([getCurrentUser(), getT()]);
+  const caps = user ? capabilitiesOf(user.actor) : null;
+  // The campaign the user takes part in themselves (any department role), for "My campaign status".
+  const ownCampaign = user && caps?.myWork ? await findOwnCampaign(user.actor) : null;
 
   return (
     <html lang={locale}>
@@ -36,19 +41,42 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             )}
           </div>
         </header>
-        {user && (
-          <nav className="flex gap-6 border-b border-gray-200 px-6 py-2 text-sm">
+        {user && caps && (
+          <nav aria-label={t("navigation")} className="flex flex-wrap items-start gap-x-10 gap-y-2 border-b border-gray-200 px-6 py-2 text-sm">
             <Link href="/">{t("home")}</Link>
-            <Link href="/campaigns">{t("campaigns")}</Link>
-            {user.actor.role === "EMPLOYEE" && <Link href="/mapping">{t("myMapping")}</Link>}
+            {/* One account, several areas: each group appears when the user has that capability. */}
+            {caps.organization && (
+              <NavGroup label={t("navOrganization")}>
+                <Link href="/admin/users">{t("users")}</Link>
+                <Link href="/admin/departments">{t("departments")}</Link>
+                <Link href="/admin/reference">{t("referenceData")}</Link>
+              </NavGroup>
+            )}
+            {caps.management && (
+              <NavGroup label={t("navManagement")}>
+                <Link href="/campaigns">{t("campaigns")}</Link>
+              </NavGroup>
+            )}
+            {caps.myWork && (
+              <NavGroup label={t("navMyWork")}>
+                <Link href="/mapping">{t("myMapping")}</Link>
+                {ownCampaign && <Link href={`/campaigns/${ownCampaign.id}`}>{t("myCampaignStatus")}</Link>}
+              </NavGroup>
+            )}
             <Link href="/categories">{t("categoryGuide")}</Link>
-            <Link href="/admin/departments">{t("departments")}</Link>
-            {user.actor.role === "ADMIN" && <Link href="/admin/users">{t("users")}</Link>}
-            {user.actor.role === "ADMIN" && <Link href="/admin/reference">{t("referenceData")}</Link>}
           </nav>
         )}
         <main className="mx-auto max-w-4xl p-6">{children}</main>
       </body>
     </html>
+  );
+}
+
+function NavGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</span>
+      <div className="flex gap-4">{children}</div>
+    </div>
   );
 }

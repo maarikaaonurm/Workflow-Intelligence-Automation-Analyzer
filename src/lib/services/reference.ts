@@ -27,15 +27,21 @@ export const unitSchema = z.object({
 
 export const systemSchema = z.object({ name: z.string().trim().min(1).max(80) });
 
-/** Reference data visible to the actor: standard items plus their own department's categories. */
-export async function listReferenceData(actor: Actor, options: { includeInactive?: boolean } = {}) {
-  const activeOnly = options.includeInactive && actor.role === "ADMIN" ? {} : { active: true };
+/**
+ * Reference data visible to the actor: standard items plus their own department's categories.
+ * Organization Admins see every department's categories on the management page; with
+ * `participantView` (choosing values for their own mapping) everyone, admins included, gets
+ * only what their own department may use.
+ */
+export async function listReferenceData(actor: Actor, options: { includeInactive?: boolean; participantView?: boolean } = {}) {
+  const asAdmin = actor.isOrgAdmin && !options.participantView;
+  const activeOnly = options.includeInactive && asAdmin ? {} : { active: true };
   const [categories, units, systems] = await Promise.all([
     db.activityCategory.findMany({
       where: {
         organizationId: actor.organizationId,
         ...activeOnly,
-        ...(actor.role === "ADMIN" ? {} : { OR: [{ departmentId: null }, { departmentId: actor.departmentId ?? "none" }] }),
+        ...(asAdmin ? {} : { OR: [{ departmentId: null }, { departmentId: actor.departmentId ?? "none" }] }),
       },
       orderBy: [{ departmentId: "asc" }, { nameEn: "asc" }],
     }),

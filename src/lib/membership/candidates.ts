@@ -18,8 +18,8 @@ export interface CandidateGroup {
 }
 
 /**
- * Groups people who can be added or transferred into a department. Inactive users and
- * Organization Admins are never candidates. Order: available users, then the target
+ * Groups people who can be added or transferred into a department. Inactive users are
+ * never candidates; Organization Admins are, like anyone else. Order: available users, then the target
  * department (only when `includeTargetDepartment`), then other departments by name.
  */
 export function groupCandidates(
@@ -30,7 +30,7 @@ export function groupCandidates(
   const groups = new Map<string, CandidateGroup>();
 
   for (const user of users) {
-    if (!user.active || user.isOrgAdmin || excluded.has(user.id)) continue;
+    if (!user.active || excluded.has(user.id)) continue;
     const m = user.membership;
     if (m && m.departmentId === options.targetDepartmentId && !options.includeTargetDepartment) continue;
 

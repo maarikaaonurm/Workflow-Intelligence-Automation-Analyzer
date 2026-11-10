@@ -23,11 +23,14 @@ export default async function LoginPage() {
       <ul className="divide-y divide-gray-200 rounded border border-gray-200">
         {users.map((u) => {
           const m = u.memberships[0];
-          const role = u.isOrgAdmin ? "ADMIN" : (m?.role ?? "EMPLOYEE");
+          const parts = [
+            u.isOrgAdmin ? t("roleADMIN") : null,
+            m ? `${m.department.name} · ${t(`role${m.role}`)}` : null,
+          ].filter(Boolean);
           return (
             <li key={u.id} className="flex items-center justify-between px-4 py-2">
               <span>
-                {u.name} <span className="text-sm text-gray-500">{t(`role${role}`)}{m ? ` · ${m.department.name}` : ""}</span>
+                {u.name} <span className="text-sm text-gray-500">{parts.join(" + ")}</span>
               </span>
               <form action={devLogin}>
                 <input type="hidden" name="userId" value={u.id} />

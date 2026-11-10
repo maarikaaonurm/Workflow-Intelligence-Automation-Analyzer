@@ -123,13 +123,13 @@ export default async function CampaignPage({
             </form>
           )}
 
-          {(status === "DRAFT" || observing) && d.addableEmployees.length > 0 && (
+          {(status === "DRAFT" || observing) && d.addableMembers.length > 0 && (
             <form action={addParticipantAction} className="flex items-end gap-2">
               <input type="hidden" name="campaignId" value={id} />
               <label className="flex flex-col text-sm">
                 {t("addParticipant")}
                 <select name="userId" className={input}>
-                  {d.addableEmployees.map((u) => (
+                  {d.addableMembers.map((u) => (
                     <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>

@@ -14,7 +14,7 @@ export default async function MappingConfirmPage({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.actor.role !== "EMPLOYEE") redirect("/");
+  if (user.actor.departmentRole === null) redirect("/");
   const { t } = await getT();
   const { action, activityId } = await searchParams;
   if (action !== "complete" && action !== "delete") notFound();

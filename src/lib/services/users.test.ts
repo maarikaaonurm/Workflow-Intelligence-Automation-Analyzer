@@ -136,9 +136,9 @@ import {
 } from "./users";
 import { groupCandidates } from "@/lib/membership/candidates";
 
-const admin: Actor = { id: "admin", organizationId: "org", role: "ADMIN", departmentId: null };
-const manager: Actor = { id: "mgr", organizationId: "org", role: "MANAGER", departmentId: "acc" };
-const employee: Actor = { id: "emp", organizationId: "org", role: "EMPLOYEE", departmentId: "acc" };
+const admin: Actor = { id: "admin", organizationId: "org", isOrgAdmin: true, departmentRole: null, departmentId: null };
+const manager: Actor = { id: "mgr", organizationId: "org", isOrgAdmin: false, departmentRole: "MANAGER", departmentId: "acc" };
+const employee: Actor = { id: "emp", organizationId: "org", isOrgAdmin: false, departmentRole: "EMPLOYEE", departmentId: "acc" };
 
 const person = (id: string, first: string, extra: Row = {}): Row => ({
   id,
@@ -257,8 +257,25 @@ describe("department membership and history", () => {
     expect(store.audits).toHaveLength(0);
   });
 
-  it("never gives an Organization Admin a department", async () => {
-    await expect(setUserMembership(admin, "admin", { departmentId: "acc", role: "EMPLOYEE" })).rejects.toMatchObject({ code: "errUserIsAdmin" });
+  it("lets an Organization Admin hold one department membership, as Employee or Department Manager", async () => {
+    await setUserMembership(admin, "admin", { departmentId: "acc", role: "EMPLOYEE" });
+    expect(activeMemberships("admin")).toHaveLength(1);
+    expect(store.users.find((u) => u.id === "admin")).toMatchObject({ isOrgAdmin: true });
+
+    await setUserMembership(admin, "admin", { departmentId: "acc", role: "MANAGER" });
+    expect(activeMemberships("admin")[0]).toMatchObject({ departmentId: "acc", role: "MANAGER" });
+    // The previous manager stayed in the department as an Employee; still exactly one manager.
+    expect(activeMemberships("mgr")[0]).toMatchObject({ departmentId: "acc", role: "EMPLOYEE" });
+    expect(store.memberships.filter((m) => m.departmentId === "acc" && m.active && m.role === "MANAGER")).toHaveLength(1);
+    // The admin privilege and the membership history are untouched by each other.
+    expect(store.memberships.filter((m) => m.userId === "admin")).toHaveLength(2);
+  });
+
+  it("still allows only one active membership for an Organization Admin", async () => {
+    await setUserMembership(admin, "admin", { departmentId: "acc", role: "EMPLOYEE" });
+    await setUserMembership(admin, "admin", { departmentId: "cm", role: "EMPLOYEE" });
+    expect(activeMemberships("admin")).toHaveLength(1);
+    expect(activeMemberships("admin")[0].departmentId).toBe("cm");
   });
 
   it("keeps exactly one active membership per user across a series of changes", async () => {
@@ -400,7 +417,52 @@ describe("new campaigns", () => {
       retrospectiveWindowDays: 3,
       reminderTime: "16:00",
     });
-    expect(store.createdParticipants.map((p) => p.userId)).toEqual(["emp"]);
+    // The Department Manager is a default participant; the deactivated Employee is not.
+    expect(store.createdParticipants.map((p) => p.userId).sort()).toEqual(["emp", "mgr"]);
+  });
+
+  const campaignInput = (departmentId: string) => ({
+    departmentId,
+    name: "Nov analysis",
+    startDate: "2026-11-09",
+    endDate: "2026-11-27",
+    reviewWindowDays: 2,
+    retrospectiveWindowDays: 3,
+    reminderTime: "16:00",
+  });
+
+  it("include the Department Manager together with the active Employees by default", async () => {
+    await createCampaign(manager, campaignInput("acc"));
+    expect(store.createdParticipants.map((p) => p.userId).sort()).toEqual(["emp", "emp2", "mgr"]);
+  });
+
+  it("do not include an Organization Admin who has no department membership", async () => {
+    await createCampaign(admin, campaignInput("acc"));
+    expect(store.createdParticipants.map((p) => p.userId)).not.toContain("admin");
+  });
+
+  it("include an Organization Admin who is a member of the department, as Employee or as Department Manager", async () => {
+    store.users.push(person("anna", "Anna", { isOrgAdmin: true }));
+    store.memberships.push(membership("m9", "anna", "acc", "EMPLOYEE"));
+    await createCampaign(admin, campaignInput("acc"));
+    expect(store.createdParticipants.map((p) => p.userId)).toContain("anna");
+
+    store.createdParticipants = [];
+    await setUserMembership(admin, "anna", { departmentId: "acc", role: "MANAGER" });
+    await createCampaign({ ...admin, isOrgAdmin: true }, campaignInput("acc"));
+    expect(store.createdParticipants.map((p) => p.userId).sort()).toEqual(["anna", "emp", "emp2", "mgr"]);
+  });
+
+  it("do not make an Organization Admin a participant of another department's campaign", async () => {
+    store.users.push(person("anna", "Anna", { isOrgAdmin: true }));
+    store.memberships.push(membership("m9", "anna", "acc", "MANAGER"));
+    store.memberships.find((m) => m.id === "m1")!.role = "EMPLOYEE"; // keep one manager in acc
+    await createCampaign(admin, campaignInput("cm"));
+    expect(store.createdParticipants.map((p) => p.userId)).toEqual(["cmmgr"]);
+  });
+
+  it("let a Department Manager create a campaign for their own department only", async () => {
+    await expect(createCampaign(manager, campaignInput("cm"))).rejects.toMatchObject({ code: "errForbidden" });
   });
 });
 
@@ -451,21 +513,20 @@ describe("membership change preview (the confirmation step)", () => {
     expect(preview.replacedManager).toMatchObject({ id: "mgr" });
   });
 
-  it("does not preview anything for inactive users, administrators or non-admin actors", async () => {
+  it("does not preview anything for inactive users or non-admin actors", async () => {
     await deactivateUser(admin, "emp2");
     await expect(getMembershipChangePreview(admin, "emp2", { departmentId: "cm", role: "EMPLOYEE" })).rejects.toMatchObject({ code: "errUserInactive" });
-    await expect(getMembershipChangePreview(admin, "admin", { departmentId: "cm", role: "EMPLOYEE" })).rejects.toMatchObject({ code: "errUserIsAdmin" });
     await expect(getMembershipChangePreview(manager, "emp", { departmentId: "cm", role: "EMPLOYEE" })).rejects.toMatchObject({ code: "errForbidden" });
   });
 });
 
 describe("transfer candidates", () => {
-  it("do not include inactive users or administrators", async () => {
+  it("do not include inactive users, and treat an Organization Admin like any other candidate", async () => {
     await deactivateUser(admin, "emp2");
     const assignable = await listAssignableUsers(admin);
     const ids = assignable.map((u: Row) => u.id);
     expect(ids).not.toContain("emp2");
-    expect(ids).not.toContain("admin");
+    expect(ids).toContain("admin");
 
     const groups = groupCandidates(
       assignable.map((u: Row) => ({ id: u.id, name: u.name, active: u.active, isOrgAdmin: u.isOrgAdmin, membership: null })),

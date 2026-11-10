@@ -2,7 +2,7 @@ import { Prisma, type AnalysisCampaign, type RemovalMode } from "@prisma/client"
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
-import { can, type Actor } from "@/lib/auth/policy";
+import { can, managesDepartment, type Actor } from "@/lib/auth/policy";
 import { AppError, ForbiddenError } from "@/lib/errors";
 import {
   fromISODate,
@@ -60,7 +60,11 @@ function assertTransition(from: CampaignStatus, to: CampaignStatus) {
 
 export async function createCampaign(actor: Actor, input: CreateCampaignInput) {
   const department = await db.department.findUnique({ where: { id: input.departmentId } });
-  if (!department || !can(actor, "campaign:create", department)) throw new ForbiddenError();
+  // The resource must carry departmentId: passing the Department row itself (which has `id`) made a
+  // Department Manager look like an outsider to their own department.
+  if (!department || !can(actor, "campaign:create", { organizationId: department.organizationId, departmentId: department.id })) {
+    throw new ForbiddenError();
+  }
 
   const periodErrors = validateCampaignPeriod(input);
   if (periodErrors.length > 0) throw new AppError(periodErrors[0]);
@@ -79,11 +83,13 @@ export async function createCampaign(actor: Actor, input: CreateCampaignInput) {
         createdById: actor.id,
       },
     });
-    // Default participants: every active Employee in the department.
-    const employees = await tx.departmentMembership.findMany({
-      where: { departmentId: department.id, active: true, role: "EMPLOYEE", user: { active: true } },
+    // Default participants: every eligible active department member, the Department Manager
+    // included (managers do operational work too). Organization privilege alone makes nobody
+    // eligible: an Organization Admin is only included through their own department membership.
+    const members = await tx.departmentMembership.findMany({
+      where: { departmentId: department.id, active: true, user: { active: true } },
     });
-    for (const m of employees) {
+    for (const m of members) {
       await tx.campaignParticipant.create({
         data: {
           campaignId: campaign.id,
@@ -101,7 +107,7 @@ export async function createCampaign(actor: Actor, input: CreateCampaignInput) {
       action: "campaign.created",
       targetType: "AnalysisCampaign",
       targetId: campaign.id,
-      metadata: { participantCount: employees.length },
+      metadata: { participantCount: members.length },
     });
     return campaign;
   });
@@ -276,7 +282,7 @@ export async function addParticipant(actor: Actor, campaignId: string, userId: s
     if (!["DRAFT", "INITIAL_MAPPING", "ACTIVE"].includes(campaign.status)) throw new AppError("errCampaignClosed");
 
     const membership = await tx.departmentMembership.findFirst({
-      where: { userId, departmentId: campaign.departmentId, active: true, role: "EMPLOYEE", user: { active: true } },
+      where: { userId, departmentId: campaign.departmentId, active: true, user: { active: true } },
     });
     if (!membership) throw new AppError("errNotDepartmentEmployee");
     if (await tx.campaignParticipant.findUnique({ where: { campaignId_userId: { campaignId, userId } } })) {
@@ -385,7 +391,6 @@ export async function restoreParticipant(actor: Actor, campaignId: string, parti
           userId: participant.userId,
           departmentId: campaign.departmentId,
           active: true,
-          role: "EMPLOYEE",
           user: { active: true },
         },
       });
@@ -520,17 +525,21 @@ export async function setReminderPreference(actor: Actor, campaignId: string, ti
   });
 }
 
+/** Drafts are visible to the department's manager and to Organization Admins only. */
+function canSeeDraft(actor: Actor, campaign: { departmentId: string }): boolean {
+  return actor.isOrgAdmin || managesDepartment(actor, campaign.departmentId);
+}
+
 export async function listCampaigns(actor: Actor) {
   const campaigns = await db.analysisCampaign.findMany({
     where:
-      actor.role === "ADMIN"
+      actor.isOrgAdmin
         ? { organizationId: actor.organizationId }
         : { organizationId: actor.organizationId, departmentId: actor.departmentId ?? "none" },
     include: { department: true },
     orderBy: { createdAt: "desc" },
   });
-  // Employees only see campaigns they have been launched for (not drafts).
-  const visible = actor.role === "EMPLOYEE" ? campaigns.filter((c) => c.status !== "DRAFT") : campaigns;
+  const visible = campaigns.filter((c) => c.status !== "DRAFT" || canSeeDraft(actor, c));
   return Promise.all(visible.map(async (c) => ({ ...(await syncCampaignStatus(c)), department: c.department })));
 }
 
@@ -538,7 +547,7 @@ export async function listCampaigns(actor: Actor) {
 export async function getCampaignDetail(actor: Actor, campaignId: string) {
   const found = await db.analysisCampaign.findUnique({ where: { id: campaignId }, include: { department: true } });
   if (!found || !can(actor, "campaign:view", found)) throw new AppError("errNotFound");
-  if (actor.role === "EMPLOYEE" && found.status === "DRAFT") throw new AppError("errNotFound");
+  if (found.status === "DRAFT" && !canSeeDraft(actor, found)) throw new AppError("errNotFound");
   const campaign = await syncCampaignStatus(found);
 
   const canManage = can(actor, "campaign:manage", campaign);
@@ -553,7 +562,8 @@ export async function getCampaignDetail(actor: Actor, campaignId: string) {
       where: { campaignId, action: "campaign.endDateChanged" },
       orderBy: { createdAt: "asc" },
     }),
-    actor.role === "EMPLOYEE"
+    // Participant data: only the actor's own record, whatever their department role is.
+    actor.departmentRole !== null && actor.departmentId === found.departmentId
       ? Promise.all([
           db.campaignParticipant.findUnique({ where: { campaignId_userId: { campaignId, userId: actor.id } } }),
           db.campaignAcknowledgement.findUnique({ where: { campaignId_userId: { campaignId, userId: actor.id } } }),
@@ -563,7 +573,7 @@ export async function getCampaignDetail(actor: Actor, campaignId: string) {
   ]);
 
   const dept = await db.departmentMembership.findMany({
-    where: { departmentId: campaign.departmentId, active: true, role: "EMPLOYEE", user: { active: true } },
+    where: { departmentId: campaign.departmentId, active: true, user: { active: true } },
     include: { user: true },
     orderBy: { user: { name: "asc" } },
   });
@@ -578,11 +588,12 @@ export async function getCampaignDetail(actor: Actor, campaignId: string) {
     participantCount: participants.filter((p) => p.status === "ACTIVE").length,
     mappingCompletedCount: participants.filter((p) => p.status === "ACTIVE" && p.mappingCompletedAt !== null).length,
     acknowledgementCount,
-    addableEmployees: canManage ? dept.filter((m) => !participantIds.has(m.userId)).map((m) => m.user) : [],
+    addableMembers: canManage ? dept.filter((m) => !participantIds.has(m.userId)).map((m) => m.user) : [],
     endDateChanges: endDateChanges.map((a) => {
       const m = a.metadata as { oldEndDate: string; newEndDate: string };
       return { at: a.createdAt, oldEndDate: m.oldEndDate, newEndDate: m.newEndDate };
     }),
-    own: own ? { participant: own[0], acknowledgement: own[1], reminder: own[2] } : null,
+    // Present only when the actor really is a participant, so a manager who is not taking part sees no participant area.
+    own: own && own[0] ? { participant: own[0], acknowledgement: own[1], reminder: own[2] } : null,
   };
 }

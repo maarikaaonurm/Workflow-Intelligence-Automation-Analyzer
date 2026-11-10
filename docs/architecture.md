@@ -19,3 +19,6 @@ MVP: dev/test login with demo accounts behind an env flag. Session abstraction i
 
 ## Hosting
 Railway, deployed from `main`. PostgreSQL via `DATABASE_URL` on Railway only. Migrations run with `prisma migrate deploy` in the Railway deploy step. See `decision-log.md` for the consequences of having no local database.
+
+## Authorization model
+`Actor` carries `isOrgAdmin`, `departmentRole` and `departmentId` (no single role). `can()` is capability-based and pure; the services enforce it and additionally check the CampaignParticipant record for participant functions. Navigation is derived from `capabilitiesOf(actor)` (Organization / Management / My work). See `authorization.md`.

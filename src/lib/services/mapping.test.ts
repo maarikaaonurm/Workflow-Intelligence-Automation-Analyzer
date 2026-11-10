@@ -20,7 +20,9 @@ vi.mock("@/lib/db", () => {
   const tx = {
     analysisCampaign: { findUnique: async () => store.campaign },
     campaignParticipant: {
-      findUnique: async () => (store.participant.id ? { ...store.participant } : null),
+      // Only the participant record that belongs to the requested user is found.
+      findUnique: async ({ where }: { where: Row }) =>
+        store.participant.id && store.participant.userId === where.campaignId_userId?.userId ? { ...store.participant } : null,
       update: async ({ data }: { data: Row }) => Object.assign(store.participant, data),
     },
     campaignAcknowledgement: { findUnique: async () => (store.acknowledged ? { id: "ack" } : null) },
@@ -70,9 +72,11 @@ vi.mock("@/lib/services/campaigns", () => ({ syncCampaignStatus: async (c: unkno
 
 import { completeMapping, deleteDraftActivity, saveActivity } from "./mapping";
 
-const employee: Actor = { id: "emp", organizationId: "org", role: "EMPLOYEE", departmentId: "acc" };
-const otherEmployee: Actor = { id: "emp2", organizationId: "org", role: "EMPLOYEE", departmentId: "acc" };
-const manager: Actor = { id: "mgr", organizationId: "org", role: "MANAGER", departmentId: "acc" };
+const employee: Actor = { id: "emp", organizationId: "org", isOrgAdmin: false, departmentRole: "EMPLOYEE", departmentId: "acc" };
+const otherEmployee: Actor = { id: "emp2", organizationId: "org", isOrgAdmin: false, departmentRole: "EMPLOYEE", departmentId: "acc" };
+const adminNoDepartment: Actor = { id: "adm", organizationId: "org", isOrgAdmin: true, departmentRole: null, departmentId: null };
+const adminManager: Actor = { id: "am", organizationId: "org", isOrgAdmin: true, departmentRole: "MANAGER", departmentId: "acc" };
+const manager: Actor = { id: "mgr", organizationId: "org", isOrgAdmin: false, departmentRole: "MANAGER", departmentId: "acc" };
 
 const input = (overrides: Partial<ActivityInput> = {}): ActivityInput => ({
   name: "Bank receipt review",
@@ -155,10 +159,15 @@ describe("saveActivity", () => {
     expect(store.activities).toHaveLength(0);
   });
 
-  it("is forbidden for a manager and for a non-participant", async () => {
+  it("is forbidden for a non-participant, and for a manager who is not a participant", async () => {
+    // The participant row belongs to "emp", so the manager has no participation of their own.
     await expect(saveActivity(manager, "c1", input())).rejects.toMatchObject({ code: "errForbidden" });
     store.participant = {};
     await expect(saveActivity(employee, "c1", input())).rejects.toMatchObject({ code: "errForbidden" });
+  });
+
+  it("is forbidden for an Organization Admin who has no department", async () => {
+    await expect(saveActivity(adminNoDepartment, "c1", input())).rejects.toMatchObject({ code: "errForbidden" });
   });
 
   it("does not let an Employee edit another Employee's activity", async () => {
@@ -207,3 +216,37 @@ describe("completeMapping and deleteDraftActivity", () => {
     expect(store.activities).toHaveLength(1);
   });
 });
+
+describe("a Department Manager (or Organization Admin) who also participates", () => {
+  const participating = (userId: string) => {
+    store.participant = { id: `p-${userId}`, campaignId: "c1", userId, status: "ACTIVE", mappingCompletedAt: null };
+  };
+
+  it("maps their own work like any participant and completes their own baseline", async () => {
+    participating("mgr");
+    const activity = await saveActivity(manager, "c1", input({ name: "Month-end review" }));
+    expect(store.activities[0].participantId).toBe("p-mgr");
+    await completeMapping(manager, "c1");
+    expect(store.participant.mappingCompletedAt).toBeInstanceOf(Date);
+    expect(store.activities[0].versions[0]).toMatchObject({ isBaseline: true, name: "Month-end review" });
+
+    await saveActivity(manager, "c1", input({ avgDurationMinutes: 50 }), activity.id);
+    expect(store.activities[0].versions).toHaveLength(2);
+  });
+
+  it("works the same for an Organization Admin who is also the Department Manager", async () => {
+    participating("am");
+    await saveActivity(adminManager, "c1", input());
+    await completeMapping(adminManager, "c1");
+    expect(store.participant.mappingCompletedAt).toBeInstanceOf(Date);
+  });
+
+  it("never lets a manager change another participant's activities", async () => {
+    participating("emp");
+    const a = await saveActivity(employee, "c1", input());
+    participating("mgr");
+    await expect(saveActivity(manager, "c1", input({ name: "Hijack" }), a.id)).rejects.toMatchObject({ code: "errNotFound" });
+    await expect(deleteDraftActivity(manager, "c1", a.id)).rejects.toMatchObject({ code: "errNotFound" });
+  });
+});
+

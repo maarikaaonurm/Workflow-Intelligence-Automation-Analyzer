@@ -19,7 +19,7 @@ export default async function CampaignsPage({ searchParams }: { searchParams: Pr
   const { actor } = user;
 
   const [campaigns, departments] = await Promise.all([listCampaigns(actor), listDepartments(actor)]);
-  const canCreate = actor.role === "ADMIN" || can(actor, "campaign:create", { organizationId: actor.organizationId, departmentId: actor.departmentId });
+  const canCreate = can(actor, "campaign:create", { organizationId: actor.organizationId, departmentId: actor.departmentId });
 
   return (
     <div className="space-y-6">
@@ -29,10 +29,10 @@ export default async function CampaignsPage({ searchParams }: { searchParams: Pr
       {canCreate && (
         <form action={createCampaignAction} className="grid grid-cols-2 gap-3 rounded border border-gray-200 p-4 text-sm">
           <h2 className="col-span-2 font-medium">{t("newCampaign")}</h2>
-          {actor.role === "ADMIN" ? (
+          {actor.isOrgAdmin ? (
             <label className="col-span-2 flex flex-col">
               {t("department")}
-              <select name="departmentId" className="rounded border border-gray-300 px-2 py-1">
+              <select name="departmentId" defaultValue={actor.departmentId ?? undefined} className="rounded border border-gray-300 px-2 py-1">
                 {departments.map((d) => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}

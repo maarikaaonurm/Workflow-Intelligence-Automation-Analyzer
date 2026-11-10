@@ -96,7 +96,7 @@ const en = {
   errNoParticipants: "Add at least one participant before launching.",
   errActiveCampaignExists: "This department already has an active campaign.",
   errCampaignClosed: "The campaign no longer accepts this change.",
-  errNotDepartmentEmployee: "The user is not an active Employee of this department.",
+  errNotDepartmentEmployee: "The user is not an active member of this department.",
   errAlreadyParticipant: "The user is already a participant.",
   errAlreadyRemoved: "The participant has already been removed.",
   errDateOutsideCampaign: "The date is outside the campaign period.",
@@ -329,6 +329,12 @@ const en = {
   addToDepartmentButton: "Add to department",
   makeManagerButton: "Make Department Manager",
   cancel: "Cancel",
+  navigation: "Main navigation",
+  navOrganization: "Organization",
+  navManagement: "Management",
+  navMyWork: "My work",
+  myCampaignStatus: "My campaign status",
+  organizationPrivilege: "Organization privilege",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -428,7 +434,7 @@ const et: Record<MessageKey, string> = {
   errNoParticipants: "Lisa enne käivitamist vähemalt üks osaleja.",
   errActiveCampaignExists: "Sellel osakonnal on juba aktiivne kampaania.",
   errCampaignClosed: "Kampaania ei võta seda muudatust enam vastu.",
-  errNotDepartmentEmployee: "Kasutaja ei ole selle osakonna aktiivne töötaja.",
+  errNotDepartmentEmployee: "Kasutaja ei ole selle osakonna aktiivne liige.",
   errAlreadyParticipant: "Kasutaja on juba osaleja.",
   errAlreadyRemoved: "Osaleja on juba eemaldatud.",
   errDateOutsideCampaign: "Kuupäev jääb kampaania perioodist välja.",
@@ -661,6 +667,12 @@ const et: Record<MessageKey, string> = {
   addToDepartmentButton: "Lisa osakonda",
   makeManagerButton: "Määra osakonnajuhatajaks",
   cancel: "Tühista",
+  navigation: "Põhinavigatsioon",
+  navOrganization: "Organisatsioon",
+  navManagement: "Juhtimine",
+  navMyWork: "Minu töö",
+  myCampaignStatus: "Minu kampaania staatus",
+  organizationPrivilege: "Organisatsiooni õigus",
 };
 
 export const messages: Record<Locale, Record<MessageKey, string>> = { en, et };

@@ -58,6 +58,31 @@ async function main() {
       }
     }
   }
+  // Organization privilege, department role and campaign participation are independent.
+  // Anna is an Organization Admin AND the Department Manager of Administration, so she can
+  // administer the organization, manage the Administration campaign and, as a default
+  // participant of that campaign, complete her own mapping and diary.
+  const administration = await db.department.upsert({
+    where: { organizationId_name: { organizationId: org.id, name: "Administration" } },
+    update: {},
+    create: { organizationId: org.id, name: "Administration" },
+  });
+  const anna = await db.user.findUniqueOrThrow({ where: { email: "admin@demo.example" } });
+  const hasManager = await db.departmentMembership.findFirst({
+    where: { departmentId: administration.id, active: true, role: "MANAGER" },
+  });
+  if (!hasManager && !(await db.departmentMembership.findFirst({ where: { userId: anna.id, active: true } }))) {
+    await db.departmentMembership.create({ data: { userId: anna.id, departmentId: administration.id, role: "MANAGER" } });
+  }
+  const kadri = await db.user.upsert({
+    where: { email: email("Kadri Mets") },
+    update: {},
+    create: { organizationId: org.id, email: email("Kadri Mets"), firstName: "Kadri", lastName: "Mets", name: "Kadri Mets" },
+  });
+  if (!(await db.departmentMembership.findFirst({ where: { userId: kadri.id, active: true } }))) {
+    await db.departmentMembership.create({ data: { userId: kadri.id, departmentId: administration.id, role: "EMPLOYEE" } });
+  }
+
   console.log("Seed complete.");
 }
 

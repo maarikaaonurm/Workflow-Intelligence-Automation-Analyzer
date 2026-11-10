@@ -22,7 +22,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 vi.mock("@/lib/auth/session", () => ({
-  requireUser: async () => ({ actor: { id: "admin", organizationId: "org", role: "ADMIN", departmentId: null } }),
+  requireUser: async () => ({ actor: { id: "admin", organizationId: "org", isOrgAdmin: true, departmentRole: null, departmentId: null } }),
 }));
 vi.mock("@/lib/services/users", () => mocks);
 

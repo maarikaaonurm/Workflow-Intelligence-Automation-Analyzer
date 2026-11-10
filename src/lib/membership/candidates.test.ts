@@ -24,10 +24,10 @@ const people: CandidateUser[] = [
 describe("groupCandidates", () => {
   const groups = groupCandidates(people, { targetDepartmentId: "new", includeTargetDepartment: false });
 
-  it("never offers inactive users or Organization Admins", () => {
+  it("never offers inactive users, but an Organization Admin is an ordinary candidate", () => {
     const ids = groups.flatMap((g) => g.users.map((u) => u.id));
     expect(ids).not.toContain("x");
-    expect(ids).not.toContain("adm");
+    expect(ids).toContain("adm");
   });
 
   it("leaves out users who already belong to the target department", () => {
@@ -37,7 +37,7 @@ describe("groupCandidates", () => {
   it("puts available users first, then departments alphabetically, users by name", () => {
     expect(groups.map((g) => g.departmentName)).toEqual([null, "Accounting", "Credit Management", "HR"]);
     expect(groups[1].users.map((u) => `${u.name}:${u.role}`)).toEqual(["User B:EMPLOYEE", "User C:MANAGER"]);
-    expect(groups[0].users.map((u) => u.id)).toEqual(["a"]);
+    expect(groups[0].users.map((u) => u.id)).toEqual(["adm", "a"]);
   });
 
   it("can include the target department, listed right after available users, and exclude chosen users", () => {

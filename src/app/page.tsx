@@ -14,10 +14,16 @@ export default async function HomePage() {
       <h1 className="text-2xl font-semibold">
         {t("welcome")}, {user.name}
       </h1>
-      <p className="mt-2 text-gray-600">
-        {t("role")}: {t(`role${user.actor.role}`)}
-        {user.departmentName ? ` · ${t("department")}: ${user.departmentName}` : ""}
-      </p>
+      <ul className="mt-2 text-gray-600">
+        {user.actor.isOrgAdmin && <li>{t("organizationPrivilege")}: {t("roleADMIN")}</li>}
+        {user.actor.departmentRole ? (
+          <li>
+            {t("department")}: {user.departmentName} · {t("role")}: {t(`role${user.actor.departmentRole}`)}
+          </li>
+        ) : (
+          <li>{t("noDepartment")}</li>
+        )}
+      </ul>
       <p className="mt-6 rounded bg-surface p-4">{t("nextSteps")}</p>
     </div>
   );

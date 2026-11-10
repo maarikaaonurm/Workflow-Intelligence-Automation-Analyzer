@@ -65,7 +65,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
               <span className={u.active ? "" : "text-gray-400"}>
                 {u.name} <span className="text-gray-500">· {u.email}</span>
                 <span className="ml-2 text-xs text-gray-500">
-                  {u.isOrgAdmin ? t("roleADMIN") : m ? `${m.department.name} · ${t(`role${m.role}`)}` : t("noDepartment")}
+                  {[u.isOrgAdmin ? t("roleADMIN") : null, m ? `${m.department.name} · ${t(`role${m.role}`)}` : t("noDepartment")].filter(Boolean).join(" + ")}
                   {!u.active && ` · ${t("userInactive")}`}
                 </span>
               </span>

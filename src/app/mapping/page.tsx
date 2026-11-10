@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function MappingPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.actor.role !== "EMPLOYEE") redirect("/");
+  if (user.actor.departmentRole === null) redirect("/");
   const { t, locale } = await getT();
   const { error } = await searchParams;
   const mapping = await getOwnMapping(user.actor);

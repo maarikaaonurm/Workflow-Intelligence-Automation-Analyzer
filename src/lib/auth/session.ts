@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
-import type { Actor, Role } from "./policy";
+import type { Actor } from "./policy";
 
 const COOKIE = "wia_session";
 const MAX_AGE_SECONDS = 60 * 60 * 8;
@@ -74,13 +74,15 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   if (!user || !user.active) return null;
 
   const membership = user.memberships[0];
-  const role: Role = user.isOrgAdmin ? "ADMIN" : (membership?.role ?? "EMPLOYEE");
   return {
+    // Organization privilege and department role are independent: an Organization Admin
+    // keeps their department membership (if any), and a membership grants no privilege.
     actor: {
       id: user.id,
       organizationId: user.organizationId,
-      role,
-      departmentId: user.isOrgAdmin ? null : (membership?.departmentId ?? null),
+      isOrgAdmin: user.isOrgAdmin,
+      departmentRole: membership?.role ?? null,
+      departmentId: membership?.departmentId ?? null,
     },
     name: user.name,
     email: user.email,

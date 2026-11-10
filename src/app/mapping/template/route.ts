@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 /** The standard Initial Activity Mapping template (Excel or CSV) for the signed-in Employee. */
 export async function GET(request: Request) {
   const user = await getCurrentUser();
-  if (!user || user.actor.role !== "EMPLOYEE") return new Response("Forbidden", { status: 403 });
+  if (!user || user.actor.departmentRole === null) return new Response("Forbidden", { status: 403 });
 
   const format = new URL(request.url).searchParams.get("format");
   if (format === "csv") {
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const { categories, units, systems } = await listReferenceData(user.actor);
+  const { categories, units, systems } = await listReferenceData(user.actor, { participantView: true });
   const buffer = await buildTemplateXlsx({
     categories: categories.map((c) => c.nameEn),
     units: units.map((u) => u.nameEn),

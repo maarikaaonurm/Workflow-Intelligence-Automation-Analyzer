@@ -67,7 +67,7 @@ async function applyMembership(
   acknowledgedCampaignImpact: boolean,
 ) {
   const user = await loadManagedUser(tx, actor, userId);
-  if (user.isOrgAdmin) throw new AppError("errUserIsAdmin");
+  // Organization Admin is a separate privilege: an admin may hold one department membership like anyone else.
   if (!user.active) throw new AppError("errUserInactive");
   const department = await tx.department.findFirst({ where: { id: target.departmentId, organizationId: actor.organizationId } });
   if (!department) throw new AppError("errNotFound");
@@ -232,7 +232,6 @@ export async function reactivateUser(actor: Actor, userId: string, membership: M
   const target = membershipInputSchema.parse(membership);
   await db.$transaction(async (tx) => {
     const user = await loadManagedUser(tx, actor, userId);
-    if (user.isOrgAdmin) throw new AppError("errUserIsAdmin");
     if (user.active) throw new AppError("errUserAlreadyActive");
     await tx.user.update({ where: { id: userId }, data: { active: true } });
     await applyMembership(tx, actor, userId, target, true);
@@ -294,7 +293,6 @@ export async function getMembershipChangePreview(actor: Actor, userId: string, m
     include: { memberships: { where: { active: true }, include: { department: true } } },
   });
   if (!user) throw new AppError("errNotFound");
-  if (user.isOrgAdmin) throw new AppError("errUserIsAdmin");
   if (!user.active) throw new AppError("errUserInactive");
   const department = await db.department.findFirst({ where: { id: target.departmentId, organizationId: actor.organizationId } });
   if (!department) throw new AppError("errNotFound");
@@ -342,11 +340,11 @@ export async function getMembershipChangePreview(actor: Actor, userId: string, m
   };
 }
 
-/** Active non-admin users, for choosing members and managers across departments. */
+/** Active users (Organization Admins included, they may hold a membership), for choosing members and managers. */
 export async function listAssignableUsers(actor: Actor) {
   requireUserAdmin(actor);
   return db.user.findMany({
-    where: { organizationId: actor.organizationId, active: true, isOrgAdmin: false },
+    where: { organizationId: actor.organizationId, active: true },
     include: { memberships: { where: { active: true }, include: { department: true } } },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   });

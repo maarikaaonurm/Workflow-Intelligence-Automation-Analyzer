@@ -12,13 +12,13 @@ export const dynamic = "force-dynamic";
 export default async function EditActivityPage({ params }: { params: Promise<{ activityId: string }> }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.actor.role !== "EMPLOYEE") redirect("/");
+  if (user.actor.departmentRole === null) redirect("/");
   const { t, locale } = await getT();
   const { activityId } = await params;
 
   const { mapping, latest } = await getOwnActivity(user.actor, activityId);
   if (!mapping.canEdit) redirect("/mapping");
-  const { categories, units, systems } = await listReferenceData(user.actor);
+  const { categories, units, systems } = await listReferenceData(user.actor, { participantView: true });
 
   // Inactive items stay selectable on activities that already use them.
   const categoryOptions = categories.map((c) => ({ id: c.id, label: localized(c, locale) }));

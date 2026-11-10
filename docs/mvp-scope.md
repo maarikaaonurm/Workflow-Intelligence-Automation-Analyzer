@@ -13,3 +13,5 @@ Status legend: [ ] not started, [~] in progress, [x] done and verified.
 - [ ] Phase 9 Privacy and hardening: retention service, audit, security review, accessibility
 
 Do not start a phase until the previous one builds, is tested and persists coherently. V1 extensions (Entra ID, Teams/Outlook, multi-department, etc.) are out of scope until the MVP works end-to-end.
+
+Role model correction: Organization Admin is a privilege separate from the department role; a Department Manager is a default campaign participant; navigation is capability-based. The Activity Diary and Confirm My Diary (Phase 4) must use the `diary:write` / `diary:confirm` actions so managers and admins who participate can use them.

@@ -67,7 +67,7 @@ export default async function UserDetailPage({
         <div><button className={primary}>{t("save")}</button></div>
       </form>
 
-      {!user.isOrgAdmin && user.active && (
+      {user.active && (
         <section className="space-y-3 rounded border border-gray-200 p-4">
           <h2 className="font-medium">{t("departmentAndRole")}</h2>
           {impactedCampaigns.length > 0 && (
@@ -94,11 +94,11 @@ export default async function UserDetailPage({
             <p className="text-xs text-gray-500">{t("roleManagerReplaceNote")}</p>
             <button className={primary}>{t("reviewChange")}</button>
           </form>
-          <Link href={`/admin/users/${user.id}/confirm`} className={secondary}>{t("deactivateUser")}</Link>
+          {!user.isOrgAdmin && <Link href={`/admin/users/${user.id}/confirm`} className={secondary}>{t("deactivateUser")}</Link>}
         </section>
       )}
 
-      {!user.isOrgAdmin && !user.active && (
+      {!user.active && (
         <form action={reactivateUserAction} className="space-y-2 rounded border border-gray-200 p-4">
           <input type="hidden" name="userId" value={user.id} />
           <h2 className="font-medium">{t("reactivateUser")}</h2>
@@ -111,7 +111,7 @@ export default async function UserDetailPage({
         </form>
       )}
 
-      {!user.isOrgAdmin && (
+      {(
         <section>
           <h2 className="mb-2 font-medium">{t("membershipHistory")}</h2>
           {history.length === 0 ? (

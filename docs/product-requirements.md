@@ -18,9 +18,17 @@
 7. Synthetic data only. English default UI plus Estonian via the same i18n structure.
 
 ## Roles
-Organization Admin (org-wide), Department Manager (exactly one active per department), Employee. Non-admin users belong to exactly one department. All authorization is enforced server-side.
+Organization Admin (an organization-wide privilege), Department Manager (at most one active per department) and Employee (the two department roles). Every user has at most one active department membership, administrators included. All authorization is enforced server-side.
 
 ## Core journey
 Department -> Campaign -> Initial Mapping -> Activity Diary -> Workload Analysis -> AI-assisted analysis -> Manager Review -> Dashboard -> Opportunities -> Final Analysis -> Report.
 
 The full requirement list is the original master prompt; `mvp-scope.md` tracks what is built.
+
+## Organization privilege, department role and campaign participation
+These are three independent concepts (details in `authorization.md`):
+- **Organization privilege** (Organization Admin) is organization-wide and independent of any department.
+- **Department role** (Department Manager or Employee) applies in the user's one active department.
+- **Campaign participation** is a separate relationship. A Department Manager is a default participant of their own department's campaign (managers do operational work too), and an Organization Admin who also belongs to a department can take part like any member. Privilege alone never makes anyone a participant.
+
+One account can hold all three: for example Organization Admin + Accounting Department Manager + participant of the Accounting campaign. No second account or role switch is needed.

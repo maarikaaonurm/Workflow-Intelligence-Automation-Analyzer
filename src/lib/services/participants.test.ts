@@ -48,10 +48,10 @@ vi.mock("@/lib/db", () => {
 
 import { removeParticipant, restoreParticipant } from "./campaigns";
 
-const manager: Actor = { id: "mgr", organizationId: "org", role: "MANAGER", departmentId: "acc" };
-const otherManager: Actor = { id: "mgr2", organizationId: "org", role: "MANAGER", departmentId: "hr" };
-const employee: Actor = { id: "emp", organizationId: "org", role: "EMPLOYEE", departmentId: "acc" };
-const admin: Actor = { id: "adm", organizationId: "org", role: "ADMIN", departmentId: null };
+const manager: Actor = { id: "mgr", organizationId: "org", isOrgAdmin: false, departmentRole: "MANAGER", departmentId: "acc" };
+const otherManager: Actor = { id: "mgr2", organizationId: "org", isOrgAdmin: false, departmentRole: "MANAGER", departmentId: "hr" };
+const employee: Actor = { id: "emp", organizationId: "org", isOrgAdmin: false, departmentRole: "EMPLOYEE", departmentId: "acc" };
+const admin: Actor = { id: "adm", organizationId: "org", isOrgAdmin: true, departmentRole: null, departmentId: null };
 
 function setup(campaignStatus: string, participantStatus: string, periods: Row[]) {
   store.campaign = {
@@ -198,3 +198,31 @@ describe("removeParticipant", () => {
     expect(store.audits.map((a) => a.action)).toEqual(["campaign.participantRemoved", "campaign.participantRestored"]);
   });
 });
+
+describe("a Department Manager who is also a participant", () => {
+  it("keeps the manager functions: can stop and restore their own participation", async () => {
+    setup("ACTIVE", "ACTIVE", [
+      { startDate: new Date("2026-11-09T00:00:00Z"), inactiveFrom: null, endMode: null, startedKind: "INITIAL" },
+    ]);
+    store.participant.userId = "mgr"; // the manager's own participant record
+    await removeParticipant(manager, "c1", "p1", "STOP_KEEP_DATA");
+    expect(store.participant.status).toBe("STOPPED");
+    await restoreParticipant(manager, "c1", "p1");
+    expect(store.participant.status).toBe("ACTIVE");
+    expect(store.periods).toHaveLength(2);
+  });
+
+  it("is managed like any participant by an Organization Admin who is also that department's manager", async () => {
+    const adminManager: Actor = { id: "am", organizationId: "org", isOrgAdmin: true, departmentRole: "MANAGER", departmentId: "acc" };
+    setup("ACTIVE", "STOPPED", [stoppedPeriod()]);
+    await restoreParticipant(adminManager, "c1", "p1");
+    expect(store.participant.status).toBe("ACTIVE");
+  });
+
+  it("is not manageable by an Organization Admin with no department", async () => {
+    const admin2: Actor = { id: "adm", organizationId: "org", isOrgAdmin: true, departmentRole: null, departmentId: null };
+    setup("ACTIVE", "STOPPED", [stoppedPeriod()]);
+    await expect(restoreParticipant(admin2, "c1", "p1")).rejects.toMatchObject({ code: "errForbidden" });
+  });
+});
+

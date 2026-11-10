@@ -212,7 +212,8 @@ export type { ImportRow };
 
 /** The campaign an Employee is currently taking part in (one per department at most). */
 export async function findOwnCampaign(actor: Actor) {
-  if (actor.role !== "EMPLOYEE" || !actor.departmentId) return null;
+  // Participant functions belong to any department member (Employee or Department Manager).
+  if (actor.departmentRole === null || !actor.departmentId) return null;
   const campaign = await db.analysisCampaign.findFirst({
     where: {
       departmentId: actor.departmentId,

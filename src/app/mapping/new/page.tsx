@@ -13,11 +13,11 @@ export const dynamic = "force-dynamic";
 export default async function NewActivityPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.actor.role !== "EMPLOYEE") redirect("/");
+  if (user.actor.departmentRole === null) redirect("/");
   const { t, locale } = await getT();
   const mapping = await getOwnMapping(user.actor);
   if (!mapping || !mapping.canEdit) redirect("/mapping");
-  const { categories, units, systems } = await listReferenceData(user.actor);
+  const { categories, units, systems } = await listReferenceData(user.actor, { participantView: true });
 
   return (
     <div className="space-y-4">

@@ -43,7 +43,7 @@ export async function assignManager(actor: Actor, departmentId: string, userId: 
 export async function listDepartments(actor: Actor) {
   return db.department.findMany({
     where:
-      actor.role === "ADMIN"
+      actor.isOrgAdmin
         ? { organizationId: actor.organizationId }
         : { organizationId: actor.organizationId, id: actor.departmentId ?? "none" },
     include: {
