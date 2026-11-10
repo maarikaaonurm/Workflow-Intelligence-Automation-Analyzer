@@ -209,6 +209,31 @@ export default async function CampaignPage({
         </section>
       )}
 
+      {d.canManage && d.mappingReadiness.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="font-medium">{t("mappingReadinessTitle")}</h2>
+          <p className="text-xs text-gray-500">{t("readinessNote")}</p>
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th scope="col" className="py-1 pr-3">{t("participants")}</th>
+                <th scope="col" className="py-1 pr-3">{t("colStatus")}</th>
+                <th scope="col" className="py-1">{t("completedOn")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.mappingReadiness.map((r) => (
+                <tr key={r.participantId} className="border-b border-gray-100">
+                  <th scope="row" className="py-1 pr-3 font-normal">{r.name}</th>
+                  <td className="py-1 pr-3">{t(`mapStatus${r.status}`)}</td>
+                  <td className="py-1">{r.completedAt ? toISODate(r.completedAt) : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
       {d.canReopen && (status === "LOCKED" || status === "FINAL") && (
         <form action={reopenCampaignAction} className="flex items-end gap-2">
           <input type="hidden" name="campaignId" value={id} />

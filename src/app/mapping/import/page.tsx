@@ -19,7 +19,7 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">{t("importActivities")}</h1>
+      <h1 className="text-2xl font-semibold">{t("importCompletedTemplate")}</h1>
       <p className="text-sm text-gray-600">{t("importHelp")}</p>
       <ErrorBanner code={error} t={t} />
       <ImportForm campaignId={mapping.campaign.id} labels={messages[locale]} />

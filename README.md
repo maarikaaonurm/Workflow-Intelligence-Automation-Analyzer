@@ -11,3 +11,9 @@ The app deploys automatically from `main`. There is no local database or local s
 4. Seed the synthetic demo data: set `SEED_ON_START=true` on the web service and redeploy. The idempotent seed runs during startup; look for "Seed complete." in the deploy logs, then remove the variable. Do not use the Railway console (no `npm` on its PATH) or `railway run` (it cannot reach the internal `DATABASE_URL` host).
 
 Checks before every push: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`. See `docs/`.
+
+## Initial Activity Mapping template
+Participants download the template in the current interface language (Estonian: `algse_tegevuskaardistuse_mall.xlsx` / `.csv`; English: `initial_activity_mapping_template.xlsx` / `.csv`), fill it in and import it from My Initial Mapping. Version 1.0; `.xlsx` and `.csv`, up to 1 MB and 200 rows. See `docs/phase-3-audit.md`.
+
+## Synthetic demo mapping data
+As an Organization Admin open Reference data and use "Load synthetic demo mapping data" (once; safe to repeat). It creates the department "Mapping Demo" with a campaign and example mappings. No environment variable is needed.

@@ -11,6 +11,7 @@ import {
   createSystemAction,
   createUnitAction,
   loadStandardDataAction,
+  loadDemoDataAction,
   setReferenceActiveAction,
 } from "../../mapping-actions";
 
@@ -51,6 +52,10 @@ export default async function ReferencePage({ searchParams }: { searchParams: Pr
         </form>
       </div>
       <p className="text-sm text-gray-600">{t("loadStandardHelp")}</p>
+      <form action={loadDemoDataAction} className="space-y-1">
+        <button className={primary}>{t("loadDemoData")}</button>
+        <p className="text-sm text-gray-600">{t("demoHelp")}</p>
+      </form>
       <ErrorBanner code={error} t={t} />
 
       <section className="space-y-3">
@@ -82,6 +87,11 @@ export default async function ReferencePage({ searchParams }: { searchParams: Pr
           <label className="flex flex-col">{t("belongsHere")}<textarea name="belongsHere" required rows={2} maxLength={500} className={input} /></label>
           <label className="flex flex-col">{t("notBelongsHere")}<textarea name="notBelongsHere" required rows={2} maxLength={500} className={input} /></label>
           <label className="col-span-2 flex flex-col">{t("boundaryExamples")}<textarea name="boundaryExamples" rows={2} maxLength={500} className={input} /></label>
+          <p className="col-span-2 text-xs text-gray-500">{t("fallbackNote")}</p>
+          <label className="col-span-2 flex flex-col">{t("definitionEt")}<textarea name="definitionEt" rows={2} maxLength={500} className={input} /></label>
+          <label className="flex flex-col">{t("belongsHereEt")}<textarea name="belongsHereEt" rows={2} maxLength={500} className={input} /></label>
+          <label className="flex flex-col">{t("notBelongsHereEt")}<textarea name="notBelongsHereEt" rows={2} maxLength={500} className={input} /></label>
+          <label className="col-span-2 flex flex-col">{t("boundaryExamplesEt")}<textarea name="boundaryExamplesEt" rows={2} maxLength={500} className={input} /></label>
           <div><button className={primary}>{t("create")}</button></div>
         </form>
       </section>

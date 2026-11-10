@@ -13,6 +13,7 @@ import {
   validateEndDateChange,
 } from "@/lib/campaigns/dates";
 import { canRemoveParticipant, canRestoreParticipant, effectiveDate } from "@/lib/campaigns/participation";
+import { mappingStatus } from "@/lib/mapping/present";
 import { autoTransition, canTransition, OBSERVATION_STATUSES, type CampaignStatus } from "@/lib/campaigns/status";
 
 /** Bump when the "About This Analysis" text changes; stored with each acknowledgement. */
@@ -551,7 +552,7 @@ export async function getCampaignDetail(actor: Actor, campaignId: string) {
   const campaign = await syncCampaignStatus(found);
 
   const canManage = can(actor, "campaign:manage", campaign);
-  const [participants, acknowledgementCount, endDateChanges, own] = await Promise.all([
+  const [participants, acknowledgementCount, endDateChanges, own, activityCounts] = await Promise.all([
     db.campaignParticipant.findMany({
       where: { campaignId },
       include: { user: true, excludedDates: { orderBy: { date: "asc" } }, periods: { orderBy: { startDate: "asc" } } },
@@ -570,6 +571,8 @@ export async function getCampaignDetail(actor: Actor, campaignId: string) {
           db.reminderPreference.findUnique({ where: { campaignId_userId: { campaignId, userId: actor.id } } }),
         ])
       : null,
+    // Only counts per participant: enough to tell Not started / Draft / Completed, never the content.
+    canManage ? db.initialActivity.groupBy({ by: ["participantId"], where: { campaignId }, _count: { _all: true } }) : [],
   ]);
 
   const dept = await db.departmentMembership.findMany({
@@ -586,6 +589,20 @@ export async function getCampaignDetail(actor: Actor, campaignId: string) {
     // Names and per-person data only for the authorized manager view.
     participants: canManage ? participants : [],
     participantCount: participants.filter((p) => p.status === "ACTIVE").length,
+    // Neutral readiness for the department manager: a status and a date, no scores, no ordering by progress.
+    mappingReadiness: canManage
+      ? participants
+          .filter((p) => p.status === "ACTIVE")
+          .map((p) => ({
+            participantId: p.id,
+            name: p.user.name,
+            status: mappingStatus({
+              activityCount: activityCounts.find((c) => c.participantId === p.id)?._count._all ?? 0,
+              completedAt: p.mappingCompletedAt,
+            }),
+            completedAt: p.mappingCompletedAt,
+          }))
+      : [],
     mappingCompletedCount: participants.filter((p) => p.status === "ACTIVE" && p.mappingCompletedAt !== null).length,
     acknowledgementCount,
     addableMembers: canManage ? dept.filter((m) => !participantIds.has(m.userId)).map((m) => m.user) : [],

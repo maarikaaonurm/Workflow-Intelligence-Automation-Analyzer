@@ -17,6 +17,11 @@ export const categorySchema = z.object({
   belongsHere: z.string().trim().min(1).max(500),
   notBelongsHere: z.string().trim().min(1).max(500),
   boundaryExamples: z.string().trim().max(500).nullable(),
+  // Estonian texts are optional: an empty one is shown in English instead.
+  definitionEt: z.string().trim().max(500).nullable(),
+  belongsHereEt: z.string().trim().max(500).nullable(),
+  notBelongsHereEt: z.string().trim().max(500).nullable(),
+  boundaryExamplesEt: z.string().trim().max(500).nullable(),
 });
 
 export const unitSchema = z.object({

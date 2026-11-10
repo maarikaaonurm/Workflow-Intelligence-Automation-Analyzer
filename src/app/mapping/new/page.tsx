@@ -1,11 +1,10 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getT } from "@/lib/i18n/server";
 import { messages } from "@/lib/i18n/messages";
 import { getOwnMapping } from "@/lib/services/mapping";
 import { listReferenceData } from "@/lib/services/reference";
-import { localized } from "@/lib/mapping/present";
+import { localized, toCategoryOptions } from "@/lib/mapping/present";
 import { ActivityForm } from "@/components/ActivityForm";
 
 export const dynamic = "force-dynamic";
@@ -25,12 +24,11 @@ export default async function NewActivityPage() {
       <ActivityForm
         campaignId={mapping.campaign.id}
         initial={{}}
-        categories={categories.map((c) => ({ id: c.id, label: localized(c, locale) }))}
+        categories={toCategoryOptions(categories, locale)}
         units={units.map((u) => ({ id: u.id, label: localized(u, locale) }))}
         systems={systems.map((s) => ({ id: s.id, label: s.name }))}
         labels={messages[locale]}
       />
-      <Link href="/mapping" className="hidden">{t("back")}</Link>
     </div>
   );
 }

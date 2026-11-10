@@ -32,3 +32,6 @@ These are three independent concepts (details in `authorization.md`):
 - **Campaign participation** is a separate relationship. A Department Manager is a default participant of their own department's campaign (managers do operational work too), and an Organization Admin who also belongs to a department can take part like any member. Privilege alone never makes anyone a participant.
 
 One account can hold all three: for example Organization Admin + Accounting Department Manager + participant of the Accounting campaign. No second account or role switch is needed.
+
+## Initial Activity Mapping (Phase 3)
+A campaign participant (Employee, Department Manager, or an Organization Admin with a department who is a participant) describes their own recurring work as a baseline. Statuses: Not Started, Draft, Completed. The form is four short sections; there are two equal ways in: direct entry, or the standard template (Download -> complete -> import -> preview -> validate -> confirm). The Department Manager sees neutral readiness (status and completion date) only. Details: `phase-3-audit.md`.

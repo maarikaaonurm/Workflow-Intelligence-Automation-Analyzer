@@ -9,6 +9,19 @@ function optionalNumber(value: string): number | null {
   return Number.isFinite(n) ? n : Number.NaN;
 }
 
+/**
+ * Duration is entered as a number plus minutes or hours and stored canonically in minutes.
+ * The older single `avgDurationMinutes` field is still accepted.
+ */
+export function durationMinutes(f: FormData): number {
+  if (f.has("durationValue")) {
+    const value = Number(text(f, "durationValue").replace(",", "."));
+    const factor = text(f, "durationUnit") === "hours" ? 60 : 1;
+    return Math.round(value * factor);
+  }
+  return Number(text(f, "avgDurationMinutes"));
+}
+
 export type ActivityFormResult = { ok: true; input: ActivityInput } | { ok: false; fields: string[] };
 
 /** Converts the activity form into a validated input, or the names of the invalid fields. */
@@ -20,6 +33,7 @@ export function parseActivityForm(f: FormData): ActivityFormResult {
     description: text(f, "description"),
     purpose: text(f, "purpose"),
     outputRecipient: text(f, "outputRecipient"),
+    outputRecipientNote: text(f, "outputRecipient") === "OTHER" && text(f, "outputRecipientNote") !== "" ? text(f, "outputRecipientNote") : null,
     primaryCategoryId: text(f, "primaryCategoryId"),
     tags: text(f, "tags")
       .split(/[;,]/)
@@ -27,7 +41,7 @@ export function parseActivityForm(f: FormData): ActivityFormResult {
       .filter(Boolean),
     frequency: text(f, "frequency"),
     occurrenceCount: Number(text(f, "occurrenceCount")),
-    avgDurationMinutes: Number(text(f, "avgDurationMinutes")),
+    avgDurationMinutes: durationMinutes(f),
     volume: optionalNumber(text(f, "volume")),
     volumeUnitId: unit === "" ? null : unit,
     systemIds: f.getAll("systemIds").map(String).filter(Boolean),

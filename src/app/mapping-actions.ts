@@ -3,17 +3,18 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
+import { getT } from "@/lib/i18n/server";
 import { AppError } from "@/lib/errors";
 import { parseActivityForm } from "@/lib/mapping/form";
-import type { ActivityInput } from "@/lib/mapping/schema";
-import type { ImportRow } from "@/lib/mapping/import";
 import {
   completeMapping,
   deleteDraftActivity,
   importActivities,
   previewImport,
   saveActivity,
+  type ImportPreview,
 } from "@/lib/services/mapping";
+import { ensureMappingDemoData } from "@/lib/demo/mapping-demo";
 import {
   categorySchema,
   createCategory,
@@ -89,42 +90,49 @@ export async function deleteActivityAction(formData: FormData) {
 
 export interface ImportPreviewState {
   error?: string;
-  rows?: ImportRow[];
+  preview?: ImportPreview;
   campaignId?: string;
 }
 
+/** Parses the uploaded template and returns a preview. Nothing is written to the database. */
 export async function previewImportAction(_prev: ImportPreviewState, formData: FormData): Promise<ImportPreviewState> {
   const { actor } = await requireUser();
+  const { locale } = await getT();
   const campaignId = z.string().min(1).parse(formData.get("campaignId"));
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "errImportNoFile" };
   try {
-    const rows = await previewImport(actor, campaignId, { name: file.name, buffer: Buffer.from(await file.arrayBuffer()) });
-    return { rows, campaignId };
+    const preview = await previewImport(actor, campaignId, { name: file.name, buffer: Buffer.from(await file.arrayBuffer()) }, locale);
+    return { preview, campaignId };
   } catch (e) {
     if (e instanceof AppError) return { error: e.code };
     throw e;
   }
 }
 
+/** Writes the confirmed rows. The preview step has already shown everything that will be saved. */
 export async function confirmImportAction(formData: FormData) {
   const { actor } = await requireUser();
   const campaignId = z.string().min(1).parse(formData.get("campaignId"));
-  let rows: unknown;
+  let payload: unknown;
   try {
-    rows = JSON.parse(String(formData.get("rows") ?? "[]"));
+    payload = JSON.parse(String(formData.get("payload") ?? "{}"));
   } catch {
     redirect("/mapping/import?error=errInvalidInput");
   }
+  let result;
   try {
-    await importActivities(actor, campaignId, Array.isArray(rows) ? (rows as ActivityInput[]) : []);
+    result = await importActivities(actor, campaignId, {
+      ...(payload as object),
+      acceptedWarnings: formData.get("acceptedWarnings") === "yes",
+    });
   } catch (e) {
     if (e instanceof AppError || e instanceof z.ZodError) {
       redirect(`/mapping/import?error=${e instanceof AppError ? e.code : "errInvalidInput"}`);
     }
     throw e;
   }
-  redirect("/mapping");
+  redirect(`/mapping/import/result?batch=${encodeURIComponent(result.batchId)}&again=${result.alreadyApplied ? "1" : "0"}`);
 }
 
 // ---- Organization Admin: reference data ----
@@ -161,6 +169,10 @@ export async function createCategoryAction(formData: FormData) {
         belongsHere: str(formData, "belongsHere"),
         notBelongsHere: str(formData, "notBelongsHere"),
         boundaryExamples: optional(formData, "boundaryExamples"),
+        definitionEt: optional(formData, "definitionEt"),
+        belongsHereEt: optional(formData, "belongsHereEt"),
+        notBelongsHereEt: optional(formData, "notBelongsHereEt"),
+        boundaryExamplesEt: optional(formData, "boundaryExamplesEt"),
       }),
     ),
   );
@@ -184,4 +196,10 @@ export async function setReferenceActiveAction(formData: FormData) {
   const id = z.string().min(1).parse(formData.get("id"));
   const active = formData.get("active") === "true";
   await adminAttempt(() => setReferenceActive(actor, kind, id, active));
+}
+
+/** Loads the idempotent synthetic demo department, campaign and example mappings. */
+export async function loadDemoDataAction() {
+  const { actor } = await requireUser();
+  await adminAttempt(() => ensureMappingDemoData(actor).then(() => undefined));
 }

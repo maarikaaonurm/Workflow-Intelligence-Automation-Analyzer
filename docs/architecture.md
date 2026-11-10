@@ -22,3 +22,8 @@ Railway, deployed from `main`. PostgreSQL via `DATABASE_URL` on Railway only. Mi
 
 ## Authorization model
 `Actor` carries `isOrgAdmin`, `departmentRole` and `departmentId` (no single role). `can()` is capability-based and pure; the services enforce it and additionally check the CampaignParticipant record for participant functions. Navigation is derived from `capabilitiesOf(actor)` (Organization / Management / My work). See `authorization.md`.
+
+## Mapping and import modules (Phase 3)
+- `lib/mapping/schema.ts` one Zod schema for the form, the import and the server; `form.ts` (form parsing, minutes/hours); `import.ts` (columns, localized value normalization, row validation, duplicate and plausibility warnings); `files.ts` (template building and reading, content checks, version check, formula neutralizing); `warnings.ts`, `baseline.ts` (content and baseline hashes), `present.ts` (localized category card, status, version diff).
+- `services/mapping.ts` (ownership, versions, completion, import preview and confirmation, audit); `lib/demo/mapping-demo.ts` (idempotent synthetic data).
+- `app/mapping/template/route.ts` serves the template in the interface language.

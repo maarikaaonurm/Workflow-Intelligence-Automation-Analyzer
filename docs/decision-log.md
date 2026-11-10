@@ -68,3 +68,17 @@
 - **Diary.** The Activity Diary is Phase 4. For now the policy actions `diary:write` and `diary:confirm` are defined and tested; tests of a manager actually creating diary entries or confirming a diary belong to Phase 4.
 - **Self-review.** No new analysis or score about managers was added; see `authorization.md`.
 - **Seed:** department Administration with Anna Admin (Organization Admin + Department Manager) and Kadri Mets (Employee). Run the seed (`SEED_ON_START=true`) or assign Anna a department on the Users page to try it.
+
+## 2026-11-15 Phase 3 completion pass
+- **Audit first, targeted changes only.** `phase-3-audit.md` lists what was complete, partial, missing, incorrect. Working code was kept; the migration is additive.
+- **One canonical category, two languages.** Estonian definition/example columns were added to the existing record instead of creating Estonian business categories. Fallback to English per missing field. Existing standard categories are upgraded only when none of their Estonian fields were set.
+- **Template language follows the interface language; the importer follows the file.** The template declares its version and language in a hidden `_meta` sheet (CSV: a first `#template_version=...;language=...` line). The importer reads either language's headings and labels, so an Estonian file can be imported while the UI is English; canonical values are identical.
+- **Import policy.** Errors exclude a row, warnings need explicit acceptance (re-checked on the server), accepted rows are written in a single transaction, nothing is written before the confirmation step. A row with errors is never imported silently: the confirmation and result say how many were not saved. A file already imported (same content hash) cannot be imported again.
+- **Idempotency.** The server issues a key at preview time; a unique `(participant, key)` makes a repeated confirmation return the existing result. The content hash blocks the same content under a new key.
+- **No raw file retention.** The file is parsed in memory and dropped; only counts and a sanitized name are stored.
+- **Plausibility warnings, not errors,** for a duration over 8 hours per occurrence or implausible occurrence counts per frequency.
+- **Baseline identity.** On completion a hash of all first versions is stored with the participant: the input-data version a later analysis compares the diary against. It does not change when later refinements add versions.
+- **Manager content view deferred.** The manager sees readiness only in Phase 3; content-level access comes with the analysis in Phase 5.
+- **Demo data without an environment variable.** An admin button loads an idempotent synthetic department, campaign and mappings; it never adds a campaign to a department that already has one. `SEED_ON_START` is not needed.
+- **Estonian labels** for frequency now read Igapäevane, Iganädalane, Igakuine, Kvartaalne, Aastane, Juhuslik.
+- **Found while testing:** the Excel template formats dropdown cells in rows below the data, which made the old "row count" check count empty rows; the importer now bounds the sheet and counts only rows with content.

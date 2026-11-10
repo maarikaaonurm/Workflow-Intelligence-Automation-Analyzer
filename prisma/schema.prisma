@@ -110,6 +110,15 @@ enum SensitiveCategory {
   NONE
 }
 
+enum ActivitySource {
+  DIRECT
+  IMPORT
+}
+
+enum ImportBatchStatus {
+  COMPLETED
+}
+
 model Organization {
   id                 String             @id @default(cuid())
   name               String
@@ -220,21 +229,25 @@ model AnalysisCampaign {
 }
 
 model CampaignParticipant {
-  id                 String                            @id @default(cuid())
-  campaignId         String
-  userId             String
+  id                           String                            @id @default(cuid())
+  campaignId                   String
+  userId                       String
   // Observation for this participant starts here (campaign start, or the join date for late participants).
-  joinedAt           DateTime                          @db.Date
-  status             ParticipantStatus                 @default(ACTIVE)
-  removedAt          DateTime?
-  removedById        String?
-  campaign           AnalysisCampaign                  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  user               User                              @relation(fields: [userId], references: [id])
-  excludedDates      CampaignParticipantExcludedDate[]
-  periods            CampaignParticipationPeriod[]
+  joinedAt                     DateTime                          @db.Date
+  status                       ParticipantStatus                 @default(ACTIVE)
+  removedAt                    DateTime?
+  removedById                  String?
+  campaign                     AnalysisCampaign                  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user                         User                              @relation(fields: [userId], references: [id])
+  excludedDates                CampaignParticipantExcludedDate[]
+  periods                      CampaignParticipationPeriod[]
   // Set when the participant completes Initial Activity Mapping; activity versions then become the baseline.
-  mappingCompletedAt DateTime?
-  activities         InitialActivity[]
+  mappingCompletedAt           DateTime?
+  // Stable identity of the completed baseline (hash of every activity's first version) and its size.
+  mappingBaselineHash          String?
+  mappingBaselineActivityCount Int?
+  importBatches                InitialMappingImportBatch[]
+  activities                   InitialActivity[]
 
   @@unique([campaignId, userId])
 }
@@ -300,19 +313,24 @@ model CampaignParticipationPeriod {
 // Standard categories have departmentId = null; Organization Admins can add department-specific ones.
 // The same definition text feeds the Activity Category Guide and (later) AI classification.
 model ActivityCategory {
-  id               String                   @id @default(cuid())
-  organizationId   String
-  departmentId     String?
-  nameEn           String
-  nameEt           String
-  definition       String
-  belongsHere      String
-  notBelongsHere   String
-  boundaryExamples String?
-  active           Boolean                  @default(true)
-  createdAt        DateTime                 @default(now())
-  organization     Organization             @relation(fields: [organizationId], references: [id])
-  versions         InitialActivityVersion[]
+  id                 String                   @id @default(cuid())
+  organizationId     String
+  departmentId       String?
+  nameEn             String
+  nameEt             String
+  definition         String
+  belongsHere        String
+  notBelongsHere     String
+  boundaryExamples   String?
+  // Estonian content. The columns above are the English text; a missing Estonian text falls back to English.
+  definitionEt       String?
+  belongsHereEt      String?
+  notBelongsHereEt   String?
+  boundaryExamplesEt String?
+  active             Boolean                  @default(true)
+  createdAt          DateTime                 @default(now())
+  organization       Organization             @relation(fields: [organizationId], references: [id])
+  versions           InitialActivityVersion[]
 
   @@unique([organizationId, departmentId, nameEn])
 }
@@ -343,11 +361,14 @@ model SystemReference {
 
 // One recurring activity of one participant in one campaign. Its content lives in versions.
 model InitialActivity {
-  id            String                   @id @default(cuid())
+  id            String                     @id @default(cuid())
   campaignId    String
   participantId String
-  createdAt     DateTime                 @default(now())
-  participant   CampaignParticipant      @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  createdAt     DateTime                   @default(now())
+  source        ActivitySource             @default(DIRECT)
+  importBatchId String?
+  importBatch   InitialMappingImportBatch? @relation(fields: [importBatchId], references: [id])
+  participant   CampaignParticipant        @relation(fields: [participantId], references: [id], onDelete: Cascade)
   versions      InitialActivityVersion[]
 
   @@index([campaignId, participantId])
@@ -366,6 +387,7 @@ model InitialActivityVersion {
   description            String
   purpose                String
   outputRecipient        OutputRecipient
+  outputRecipientNote    String?
   primaryCategoryId      String
   tags                   String[]
   frequency              Frequency
@@ -392,4 +414,30 @@ model InitialActivityVersion {
   systems                SystemReference[]
 
   @@unique([activityId, versionNumber])
+}
+
+// One confirmed import of a completed template. Nothing is written before the participant confirms,
+// so only completed batches exist. The raw uploaded file is never stored.
+model InitialMappingImportBatch {
+  id               String              @id @default(cuid())
+  campaignId       String
+  participantId    String
+  // Client-held key created at preview time: a repeated confirmation of the same preview cannot import twice.
+  idempotencyKey   String
+  // Hash of the confirmed rows: importing the same content again is detected.
+  contentHash      String
+  status           ImportBatchStatus   @default(COMPLETED)
+  importedAt       DateTime            @default(now())
+  templateVersion  String
+  templateLanguage String
+  sourceFilename   String?
+  rowCount         Int
+  successCount     Int
+  warningCount     Int
+  errorCount       Int
+  participant      CampaignParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  activities       InitialActivity[]
+
+  @@unique([participantId, idempotencyKey])
+  @@index([participantId, contentHash])
 }

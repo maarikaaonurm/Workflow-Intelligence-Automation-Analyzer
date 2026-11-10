@@ -1,4 +1,6 @@
+import { messages, type Locale } from "@/lib/i18n/messages";
 import { activityInputSchema, type ActivityInput } from "./schema";
+import { activityWarnings, duplicateSignals, type ActivityRef } from "./warnings";
 import {
   AUTOMATION_LEVELS,
   DEGREES,
@@ -12,32 +14,33 @@ import {
 
 export const MAX_IMPORT_ROWS = 200;
 
-/** Template columns, in order. `enumValues` are the accepted codes (case-insensitive). */
+/** Template columns in order (canonical keys). `prefix` names the message family that holds the localized values. */
 export const IMPORT_COLUMNS = [
-  { key: "name", required: true },
-  { key: "description", required: true },
-  { key: "purpose", required: true },
-  { key: "output_recipient", required: true, enumValues: OUTPUT_RECIPIENTS },
+  { key: "name", required: true, text: true },
+  { key: "description", required: true, text: true },
+  { key: "purpose", required: true, text: true },
+  { key: "output_recipient", required: true, enumValues: OUTPUT_RECIPIENTS, prefix: "recipient" },
+  { key: "output_recipient_note", required: false, text: true },
   { key: "primary_category", required: true },
-  { key: "tags", required: false },
-  { key: "frequency", required: true, enumValues: FREQUENCIES },
+  { key: "tags", required: false, text: true },
+  { key: "frequency", required: true, enumValues: FREQUENCIES, prefix: "freq" },
   { key: "occurrence_count", required: true },
   { key: "avg_duration_minutes", required: true },
   { key: "volume", required: false },
   { key: "volume_unit", required: false },
   { key: "systems", required: false },
-  { key: "automation_level", required: true, enumValues: AUTOMATION_LEVELS },
-  { key: "rule_based_degree", required: true, enumValues: DEGREES },
-  { key: "judgement_degree", required: true, enumValues: DEGREES },
-  { key: "exception_frequency", required: true, enumValues: EXCEPTION_FREQUENCIES },
+  { key: "automation_level", required: true, enumValues: AUTOMATION_LEVELS, prefix: "auto" },
+  { key: "rule_based_degree", required: true, enumValues: DEGREES, prefix: "degree" },
+  { key: "judgement_degree", required: true, enumValues: DEGREES, prefix: "degree" },
+  { key: "exception_frequency", required: true, enumValues: EXCEPTION_FREQUENCIES, prefix: "exc" },
   { key: "data_manually_copied", required: true, yesNo: true },
   { key: "needs_info_from_others", required: true, yesNo: true },
-  { key: "waiting", required: true, enumValues: OCCURRENCE_LEVELS },
-  { key: "rework", required: true, enumValues: OCCURRENCE_LEVELS },
-  { key: "seasonality", required: true, enumValues: SEASONALITIES },
-  { key: "sensitive_data", required: true, enumValues: SENSITIVE_CATEGORIES },
+  { key: "waiting", required: true, enumValues: OCCURRENCE_LEVELS, prefix: "occ" },
+  { key: "rework", required: true, enumValues: OCCURRENCE_LEVELS, prefix: "occ" },
+  { key: "seasonality", required: true, enumValues: SEASONALITIES, prefix: "season" },
+  { key: "sensitive_data", required: true, enumValues: SENSITIVE_CATEGORIES, prefix: "sens" },
   { key: "improvement_opportunity", required: false, yesNo: true },
-  { key: "employee_suggestion", required: false },
+  { key: "employee_suggestion", required: false, text: true },
 ] as const;
 
 export type ImportColumn = (typeof IMPORT_COLUMNS)[number];
@@ -46,32 +49,98 @@ export interface ImportReferences {
   categories: { id: string; nameEn: string; nameEt: string }[];
   units: { id: string; key: string; nameEn: string; nameEt: string }[];
   systems: { id: string; name: string }[];
-  /** Names of activities the participant already has (for duplicate warnings). */
-  existingNames: string[];
+  /** The participant's current activities (for duplicate warnings). */
+  existing: ActivityRef[];
 }
 
-export type IssueCode = "required" | "invalid" | "unknown" | "duplicateExisting" | "duplicateInFile";
+export type IssueCode =
+  | "required"
+  | "invalid"
+  | "unknown"
+  | "formula"
+  | "durationHigh"
+  | "occurrenceHigh"
+  | "duplicateExisting"
+  | "duplicateInFile"
+  | "duplicateSimilar";
+
 export interface ImportIssue {
   field: string;
   code: IssueCode;
   value?: string;
 }
 
+export type RowStatus = "READY" | "WARNING" | "ERROR";
+
+/** What the preview shows for a row, resolved to readable labels. */
+export interface RowPreview {
+  name: string;
+  category: string;
+  frequency: string;
+  occurrenceCount: string;
+  avgDurationMinutes: string;
+  volume: string;
+  unit: string;
+  systems: string[];
+}
+
 export interface ImportRow {
   rowNumber: number;
+  status: RowStatus;
   /** Present only when the row has no errors. */
   input: ActivityInput | null;
   errors: ImportIssue[];
   warnings: ImportIssue[];
+  preview: RowPreview;
 }
 
-const norm = (v: string) => v.trim().toLowerCase();
+export function summarizeImport(rows: ImportRow[]) {
+  return {
+    ready: rows.filter((r) => r.status === "READY").length,
+    warning: rows.filter((r) => r.status === "WARNING").length,
+    error: rows.filter((r) => r.status === "ERROR").length,
+  };
+}
+
+const norm = (v: string) => v.trim().toLowerCase().replace(/\s+/g, " ");
 const enumKey = (v: string) => v.trim().toUpperCase().replace(/[\s-]+/g, "_");
+
+/** Lower-cases a header and joins words with spaces: "Avg_Duration-Minutes *" -> "avg duration minutes". */
+export function normalizeHeader(h: string): string {
+  return h.replace(/\*/g, "").trim().toLowerCase().replace(/[\s_-]+/g, " ");
+}
+
+const LOCALES: Locale[] = ["et", "en"];
+const label = (locale: Locale, key: string) => (messages[locale] as Record<string, string>)[key] ?? key;
+
+/** Heading text (either language, or the canonical key) to canonical column key. */
+export function headerLookup(): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const column of IMPORT_COLUMNS) {
+    map.set(normalizeHeader(column.key), column.key);
+    for (const locale of LOCALES) map.set(normalizeHeader(label(locale, `col_${column.key}`)), column.key);
+  }
+  return map;
+}
+
+/** Localized label (either language) or canonical code to canonical code, for one controlled-value family. */
+function valueLookup<T extends string>(prefix: string, codes: readonly T[]): Map<string, T> {
+  const map = new Map<string, T>();
+  for (const code of codes) {
+    map.set(norm(enumKey(code)), code);
+    map.set(norm(code.replace(/_/g, " ")), code);
+    for (const locale of LOCALES) map.set(norm(label(locale, `${prefix}${code}`)), code);
+  }
+  return map;
+}
+
+const yesWords = new Set(["yes", "y", "true", "1", ...LOCALES.map((l) => norm(label(l, "yes")))]);
+const noWords = new Set(["no", "n", "false", "0", ...LOCALES.map((l) => norm(label(l, "no")))]);
 
 function parseYesNo(v: string): boolean | null {
   const x = norm(v);
-  if (["yes", "y", "true", "1", "jah"].includes(x)) return true;
-  if (["no", "n", "false", "0", "ei"].includes(x)) return false;
+  if (yesWords.has(x)) return true;
+  if (noWords.has(x)) return false;
   return null;
 }
 
@@ -82,10 +151,8 @@ function splitList(v: string): string[] {
     .filter(Boolean);
 }
 
-/** Lower-cases a header and joins words with underscores: "Avg Duration Minutes" -> avg_duration_minutes. */
-export function normalizeHeader(h: string): string {
-  return h.trim().toLowerCase().replace(/[\s-]+/g, "_");
-}
+/** A cell that starts like a spreadsheet formula is refused: it is never executed or stored as one. */
+const FORMULA_START = /^[=+@\t\r]/;
 
 /** Maps a schema field name (as reported by Zod) back to its template column. */
 const FIELD_TO_COLUMN: Record<string, string> = {
@@ -93,6 +160,7 @@ const FIELD_TO_COLUMN: Record<string, string> = {
   description: "description",
   purpose: "purpose",
   outputRecipient: "output_recipient",
+  outputRecipientNote: "output_recipient_note",
   primaryCategoryId: "primary_category",
   tags: "tags",
   frequency: "frequency",
@@ -116,13 +184,24 @@ const FIELD_TO_COLUMN: Record<string, string> = {
 };
 
 /**
- * Validates imported records against the same schema as the manual form. `records`
- * are keyed by normalized header; row numbers are spreadsheet rows (header = 1).
- * Fully empty rows are skipped. Duplicate names only warn.
+ * Validates imported records against the same schema as the manual form, and normalizes
+ * localized values (Estonian or English labels, or canonical codes) to canonical values.
+ * `records` are keyed by canonical column key; row numbers are spreadsheet rows (header = 1).
+ * Fully empty rows are skipped. Errors exclude a row from the import; warnings (duplicates,
+ * unusual values) need the participant's confirmation.
  */
-export function parseImportRecords(records: Record<string, string>[], refs: ImportReferences): ImportRow[] {
-  const existing = new Set(refs.existingNames.map(norm));
-  const seenInFile = new Set<string>();
+export function parseImportRecords(records: Record<string, string>[], refs: ImportReferences, locale: Locale = "en"): ImportRow[] {
+  const lookups = {
+    recipient: valueLookup("recipient", OUTPUT_RECIPIENTS),
+    freq: valueLookup("freq", FREQUENCIES),
+    auto: valueLookup("auto", AUTOMATION_LEVELS),
+    degree: valueLookup("degree", DEGREES),
+    exc: valueLookup("exc", EXCEPTION_FREQUENCIES),
+    occ: valueLookup("occ", OCCURRENCE_LEVELS),
+    season: valueLookup("season", SEASONALITIES),
+    sens: valueLookup("sens", SENSITIVE_CATEGORIES),
+  };
+  const earlierInFile: ActivityRef[] = [];
   const rows: ImportRow[] = [];
 
   records.forEach((record, index) => {
@@ -133,15 +212,20 @@ export function parseImportRecords(records: Record<string, string>[], refs: Impo
     const warnings: ImportIssue[] = [];
     const get = (key: string) => (record[key] ?? "").trim();
 
+    for (const column of IMPORT_COLUMNS) {
+      if ("text" in column && FORMULA_START.test(record[column.key] ?? "")) errors.push({ field: column.key, code: "formula" });
+    }
+    const blocked = new Set(errors.map((e) => e.field));
+
     const requireValue = (key: string): string => {
       const v = get(key);
-      if (v === "") errors.push({ field: key, code: "required" });
-      return v;
+      if (v === "" && !blocked.has(key)) errors.push({ field: key, code: "required" });
+      return blocked.has(key) ? "" : v;
     };
-    const parseEnum = <T extends string>(key: string, allowed: readonly T[], required: boolean): T | undefined => {
+    const parseEnum = <T extends string>(key: string, lookup: Map<string, T>, required: boolean): T | undefined => {
       const v = required ? requireValue(key) : get(key);
       if (v === "") return undefined;
-      const found = allowed.find((a) => a === enumKey(v));
+      const found = lookup.get(norm(v)) ?? lookup.get(norm(enumKey(v)));
       if (!found) errors.push({ field: key, code: "unknown", value: v });
       return found;
     };
@@ -171,61 +255,72 @@ export function parseImportRecords(records: Record<string, string>[], refs: Impo
     const purpose = requireValue("purpose");
 
     let primaryCategoryId: string | undefined;
+    let categoryLabel = "";
     const categoryName = requireValue("primary_category");
     if (categoryName) {
       const match = refs.categories.find((c) => norm(c.nameEn) === norm(categoryName) || norm(c.nameEt) === norm(categoryName));
-      if (match) primaryCategoryId = match.id;
-      else errors.push({ field: "primary_category", code: "unknown", value: categoryName });
+      if (match) {
+        primaryCategoryId = match.id;
+        categoryLabel = locale === "et" ? match.nameEt : match.nameEn;
+      } else errors.push({ field: "primary_category", code: "unknown", value: categoryName });
     }
 
     let volumeUnitId: string | null = null;
+    let unitLabel = "";
     const unitName = get("volume_unit");
     if (unitName) {
       const match = refs.units.find((u) => [u.key, u.nameEn, u.nameEt].some((x) => norm(x) === norm(unitName)));
-      if (match) volumeUnitId = match.id;
-      else errors.push({ field: "volume_unit", code: "unknown", value: unitName });
+      if (match) {
+        volumeUnitId = match.id;
+        unitLabel = locale === "et" ? match.nameEt : match.nameEn;
+      } else errors.push({ field: "volume_unit", code: "unknown", value: unitName });
     }
 
     const systemIds: string[] = [];
+    const systemLabels: string[] = [];
     for (const systemName of splitList(get("systems"))) {
       const match = refs.systems.find((s) => norm(s.name) === norm(systemName));
-      if (match) systemIds.push(match.id);
-      else errors.push({ field: "systems", code: "unknown", value: systemName });
+      if (match) {
+        systemIds.push(match.id);
+        systemLabels.push(match.name);
+      } else errors.push({ field: "systems", code: "unknown", value: systemName });
     }
 
-    const sensitiveRaw = splitList(requireValue("sensitive_data"));
     const sensitiveData: (typeof SENSITIVE_CATEGORIES)[number][] = [];
-    for (const item of sensitiveRaw) {
-      const found = SENSITIVE_CATEGORIES.find((c) => c === enumKey(item));
+    for (const item of splitList(requireValue("sensitive_data"))) {
+      const found = lookups.sens.get(norm(item)) ?? lookups.sens.get(norm(enumKey(item)));
       if (found) sensitiveData.push(found);
       else errors.push({ field: "sensitive_data", code: "unknown", value: item });
     }
 
+    const outputRecipient = parseEnum("output_recipient", lookups.recipient, true);
+    const noteText = get("output_recipient_note");
     const candidate = {
       name,
       description,
       purpose,
-      outputRecipient: parseEnum("output_recipient", OUTPUT_RECIPIENTS, true),
+      outputRecipient,
+      outputRecipientNote: noteText === "" || blocked.has("output_recipient_note") ? null : noteText,
       primaryCategoryId,
-      tags: splitList(get("tags")),
-      frequency: parseEnum("frequency", FREQUENCIES, true),
+      tags: blocked.has("tags") ? [] : splitList(get("tags")),
+      frequency: parseEnum("frequency", lookups.freq, true),
       occurrenceCount: parseNumber("occurrence_count", true),
       avgDurationMinutes: parseNumber("avg_duration_minutes", true),
       volume: parseNumber("volume", false),
       volumeUnitId,
       systemIds,
-      automationLevel: parseEnum("automation_level", AUTOMATION_LEVELS, true),
-      ruleBasedDegree: parseEnum("rule_based_degree", DEGREES, true),
-      judgementDegree: parseEnum("judgement_degree", DEGREES, true),
-      exceptionFrequency: parseEnum("exception_frequency", EXCEPTION_FREQUENCIES, true),
+      automationLevel: parseEnum("automation_level", lookups.auto, true),
+      ruleBasedDegree: parseEnum("rule_based_degree", lookups.degree, true),
+      judgementDegree: parseEnum("judgement_degree", lookups.degree, true),
+      exceptionFrequency: parseEnum("exception_frequency", lookups.exc, true),
       dataManuallyCopied: parseBool("data_manually_copied", true),
       needsInfoFromOthers: parseBool("needs_info_from_others", true),
-      waiting: parseEnum("waiting", OCCURRENCE_LEVELS, true),
-      rework: parseEnum("rework", OCCURRENCE_LEVELS, true),
-      seasonality: parseEnum("seasonality", SEASONALITIES, true),
+      waiting: parseEnum("waiting", lookups.occ, true),
+      rework: parseEnum("rework", lookups.occ, true),
+      seasonality: parseEnum("seasonality", lookups.season, true),
       sensitiveData,
       improvementOpportunity: parseBool("improvement_opportunity", false),
-      employeeSuggestion: get("employee_suggestion") === "" ? null : get("employee_suggestion"),
+      employeeSuggestion: get("employee_suggestion") === "" || blocked.has("employee_suggestion") ? null : get("employee_suggestion"),
     };
 
     // Run the shared schema for ranges and cross-field rules, but only report what the
@@ -245,15 +340,48 @@ export function parseImportRecords(records: Record<string, string>[], refs: Impo
       }
     }
 
+    // Warnings never exclude a row, they ask for the participant's review.
+    if (input) for (const code of activityWarnings(input)) warnings.push({ field: code === "durationHigh" ? "avg_duration_minutes" : "occurrence_count", code });
     if (name) {
-      const key = norm(name);
-      if (existing.has(key)) warnings.push({ field: "name", code: "duplicateExisting", value: name });
-      else if (seenInFile.has(key)) warnings.push({ field: "name", code: "duplicateInFile", value: name });
-      seenInFile.add(key);
+      const ref: ActivityRef = { name, primaryCategoryId, description };
+      for (const code of duplicateSignals(ref, refs.existing, earlierInFile)) warnings.push({ field: "name", code, value: name });
+      earlierInFile.push(ref);
     }
 
-    rows.push({ rowNumber, input: errors.length === 0 ? input : null, errors, warnings });
+    const status: RowStatus = errors.length > 0 ? "ERROR" : warnings.length > 0 ? "WARNING" : "READY";
+    rows.push({
+      rowNumber,
+      status,
+      input: status === "ERROR" ? null : input,
+      errors,
+      warnings,
+      preview: {
+        name,
+        category: categoryLabel,
+        frequency: candidate.frequency ?? "",
+        occurrenceCount: get("occurrence_count"),
+        avgDurationMinutes: get("avg_duration_minutes"),
+        volume: get("volume"),
+        unit: unitLabel,
+        systems: systemLabels,
+      },
+    });
   });
 
   return rows;
+}
+
+/**
+ * Warnings for activities about to be written, recomputed on the server at confirmation
+ * so the "I reviewed the warnings" step cannot be skipped by editing the request.
+ */
+export function confirmationWarnings(inputs: ActivityInput[], existing: ActivityRef[], descriptions: boolean = true) {
+  const earlier: ActivityRef[] = [];
+  let count = 0;
+  for (const input of inputs) {
+    const ref: ActivityRef = { name: input.name, primaryCategoryId: input.primaryCategoryId, description: descriptions ? input.description : "" };
+    count += activityWarnings(input).length + duplicateSignals(ref, existing, earlier).length;
+    earlier.push(ref);
+  }
+  return count;
 }

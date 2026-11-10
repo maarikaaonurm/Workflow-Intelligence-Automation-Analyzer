@@ -7,3 +7,9 @@
 - Retention is a callable service plus dev command; production scheduling to be documented (Railway cron).
 - Audit log stores safe metadata only, no secrets or sensitive payloads.
 - Employee Summary: anonymous, manager-published, no monetary figures.
+
+## Template uploads (Phase 3)
+- The uploaded file is read from the request into memory, parsed, and discarded in the same request. It is not written to disk, to the database or to logs; there is no temporary file to clean up.
+- The preview lives only in the participant's browser; nothing is saved until they confirm. Cancelling or leaving saves nothing.
+- Stored about an import: counts, template version and language, a sanitized file name and a content hash. The audit log holds the same counts, never spreadsheet content or activity text.
+- Activity descriptions can mention sensitive topics; participants classify sensitivity per activity, and the template instructions ask for no personal data of customers or colleagues.

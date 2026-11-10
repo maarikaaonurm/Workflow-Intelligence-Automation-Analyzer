@@ -16,3 +16,12 @@
 
 ## Role-model tests (Correction 3)
 `src/lib/auth/policy.test.ts` covers every combination (Organization Admin alone, Admin + Employee, Admin + Department Manager, Manager, Employee), manager scope, participant access limited to own records and own department, and capabilities. `users.test.ts` covers default campaign participants (manager included, admin without membership excluded, admin with membership included, no participation in another department, one membership and one manager still enforced for admins). `dual-role.test.ts` covers the About This Analysis acknowledgement for managers and admin combinations. `mapping.test.ts` covers a manager and an admin-manager mapping their own work. `participants.test.ts` shows Stop / Exclude / Restore still work for managers who participate. The Activity Diary (Phase 4) has no service yet: its policy actions are tested, its behaviour is not.
+
+## Phase 3 completion tests
+- `lib/mapping/mapping.test.ts`: schema (positive count and duration, exclusivity, recipient note), form parsing (hours to minutes), localized Estonian/English normalization to identical canonical values, validation, formula refusal, row statuses, duplicate and plausibility warnings, baseline hash, version diff, category localization and fallback.
+- `lib/mapping/template-import.test.ts`: localized Excel and CSV templates (file names, sheets, headings, dropdown values, version), reading both languages, unsupported or missing version, missing column, type/size/content mismatch, formula cells, row limits, formula neutralizing, file name sanitizing.
+- `lib/services/mapping.test.ts`: ownership, versions and baseline, audits without content, completion validation, preview before write, cancellation, confirmation, idempotency, repeated content, accepted warnings re-checked on the server, rollback on failure, managers and admins cannot import for others.
+- `app/mapping/template/route.test.ts`: Estonian UI gets the Estonian .xlsx and .csv, English UI the English ones.
+- `lib/i18n/phase3-localization.test.ts`: every Phase 3 text exists in Estonian and is not an English copy; standard category cards are complete in both languages.
+- `lib/services/readiness.test.ts`: manager readiness (neutral), manager who participates, demo-data guard.
+Not covered by automated tests: real SQL constraints, the browser behaviour of the stepped form and the upload form, and the first run of the demo-data loader against a real database.

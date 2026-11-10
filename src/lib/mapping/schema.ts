@@ -17,6 +17,8 @@ export const activityInputSchema = z
     description: z.string().trim().min(1).max(1000),
     purpose: z.string().trim().min(1).max(500),
     outputRecipient: z.enum(OUTPUT_RECIPIENTS),
+    // Optional clarification, only meaningful for "Other".
+    outputRecipientNote: z.string().trim().max(200).nullable(),
     primaryCategoryId: z.string().min(1),
     tags: z.array(z.string().trim().min(1).max(40)).max(10),
     frequency: z.enum(FREQUENCIES),
@@ -43,6 +45,9 @@ export const activityInputSchema = z
     // Volume and unit go together; per-unit metrics are never computed from half a pair.
     if ((value.volume === null) !== (value.volumeUnitId === null)) {
       ctx.addIssue({ code: "custom", path: ["volume"], message: "volume and unit must be given together" });
+    }
+    if (value.outputRecipientNote !== null && value.outputRecipient !== "OTHER") {
+      ctx.addIssue({ code: "custom", path: ["outputRecipientNote"], message: "a clarification is only for Other" });
     }
     // "No Sensitive Data" excludes every other category.
     if (value.sensitiveData.includes("NONE") && value.sensitiveData.length > 1) {

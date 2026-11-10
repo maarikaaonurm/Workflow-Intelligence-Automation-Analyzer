@@ -23,3 +23,10 @@ User correction: `User.firstName` and `User.lastName` (display `name` kept in sy
 
 ## Privilege, role and participation (Correction 3)
 No schema change was needed: `User.isOrgAdmin` (privilege), `DepartmentMembership.role` with its history (department role) and `CampaignParticipant` with participation periods (participation) already model three separate things. What changed is the rules around them: an Organization Admin may hold one department membership (previously blocked), and the default participants of a new campaign are all active department members including the manager. The existing partial unique indexes (one active membership per user, one active manager per department) apply to admins too. Seed data adds department "Administration" with Anna Admin as its Department Manager (Organization Admin + Department Manager) and Kadri Mets as an Employee.
+
+## Phase 3 completion
+- `ActivityCategory`: `definitionEt`, `belongsHereEt`, `notBelongsHereEt`, `boundaryExamplesEt` (the existing text columns are the English text; one canonical record per category).
+- `InitialActivityVersion.outputRecipientNote`; `InitialActivity.source` (DIRECT / IMPORT) and `importBatchId`.
+- `InitialMappingImportBatch`: idempotency key (unique per participant), content hash, template version and language, sanitized file name, row/success/warning/error counts. Raw files are never stored.
+- `CampaignParticipant.mappingBaselineHash` and `mappingBaselineActivityCount`: the identity of the completed baseline (the input-data version for later analysis).
+- Canonical business values (`DAILY`, `END_OF_MONTH`, ...) are stored; localized labels are display only.
